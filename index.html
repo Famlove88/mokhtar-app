@@ -745,10 +745,8 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
     <div class="modal-box">
       <div class="modal-title">➕ إضافة سجل جديد</div>
       <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px;line-height:2;background:var(--navy3);border:1px solid var(--border);border-radius:9px;padding:10px 12px">الملف: <span id="addRegLabel" style="color:var(--gold);font-weight:700">—</span><br>الرقم التسلسلي التالي: <span id="addSerialPreview" style="color:#7DCCA0;font-weight:700">#1</span></div>
-      <div class="form-grid">
-        <div class="form-field full" id="addTitleWrap"><label id="addTitleLabel">العنوان</label><input type="text" id="nTitle" placeholder="اكتب هنا..." onkeydown="if(event.key==='Enter')addCitizen()"></div>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px">اترك الحقل فارغاً وعبّئ بقية الحقول لاحقاً من شاشة السجل.</div>
+      <div id="addNameFields"></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">اترك الحقول فارغة وعبّئ الباقي لاحقاً من شاشة السجل.</div>
       <div class="modal-actions"><button class="btn btn-gold" onclick="addCitizen()">✓ إضافة</button><button class="btn btn-outline" onclick="closeModal('addModal')">إلغاء</button></div>
     </div>
   </div>
@@ -1028,7 +1026,7 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
             <option value="personal">👤 شخصية</option><option value="registry">📜 نفوس</option><option value="address">📍 عنوان</option><option value="docs">🪪 وثائق</option><option value="extra" selected>➕ إضافية</option>
           </select>
         </div>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer"><input type="checkbox" id="qfIsTitle" style="width:auto"> ★ تعيين كعنوان العرض في القوائم</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer"><input type="checkbox" id="qfIsTitle" style="width:auto"> ★ اجعله جزءاً من اسم العرض</label>
         <div class="form-field" id="qfOptsWrap" style="display:none">
           <label>خيارات القائمة (مفصولة بفاصلة)</label>
           <input type="text" id="qfOpts" placeholder="خيار1, خيار2, خيار3">
@@ -1160,13 +1158,23 @@ function regLabel(r){ const o=REGS.find(x=>x.id===r); return o?o.label:'—'; }
 function regCls(r){ const o=REGS.find(x=>x.id===r); return o?o.cls:'nat-st'; }
 function regIcon(r){ const o=REGS.find(x=>x.id===r); return o?o.icon:''; }
 function regCount(reg){ return citizens.filter(c=>regOf(c)===reg).length; }
-// حقل العنوان المعيّن لكل ملف (أو null)
-function citTitleField(reg){ return extraFields.find(e=>(e.reg||'lb')===reg && e.isTitle) || null; }
-// اسم العرض: قيمة حقل العنوان إن وُجد، وإلا الرقم التسلسلي (#N)، وإلا فارغ
+// حقول الاسم (المعلّمة بنجمة ★) لملف معيّن، مرتّبة حسب ترتيب الحقول
+function _nameFieldsFor(reg){
+  const order=(fieldLayout||[]).map(le=>le&&le.key);
+  const fs=extraFields.filter(e=>(e.reg||'lb')===reg && e.isTitle);
+  fs.sort(function(a,b){ var ia=order.indexOf('extra_'+a.id), ib=order.indexOf('extra_'+b.id); if(ia<0)ia=9999; if(ib<0)ib=9999; return ia-ib; });
+  return fs;
+}
+// متوافق مع القديم: أول حقل اسم أو null
+function citTitleField(reg){ return _nameFieldsFor(reg)[0] || null; }
+// اسم العرض: دمج كل حقول الاسم (★) بالترتيب بفراغ بينها، وإلا الرقم التسلسلي (#N)
 function citName(c){
   if(!c) return '';
-  const tf=citTitleField(regOf(c));
-  if(tf){ const v=((c.extra||{})[tf.id]||'').toString().trim(); if(v) return v; }
+  const fs=_nameFieldsFor(regOf(c));
+  if(fs.length){
+    const parts=fs.map(function(f){ return ((c.extra||{})[f.id]||'').toString().trim(); }).filter(Boolean);
+    if(parts.length) return parts.join(' ');
+  }
   return (c.serial!=null && c.serial!=='') ? ('#'+c.serial) : '';
 }
 // الرقم التسلسلي التالي ضمن ملف معيّن (يبدأ من 1 لكل ملف)
@@ -1192,12 +1200,9 @@ function setActiveReg(r){
 }
 function setTitleField(efId){
   const e=extraFields.find(x=>x.id===efId); if(!e)return;
-  const reg=e.reg||'lb';
-  const turnOn=!e.isTitle;
-  extraFields.forEach(x=>{ if((x.reg||'lb')===reg) x.isTitle=false; });
-  e.isTitle=turnOn;
+  e.isTitle=!e.isTitle;
   saveEF();
-  notify(turnOn?('★ "'+e.label+'" أصبح عنوان العرض لهذا الملف'):'أُلغي تعيين حقل العنوان');
+  notify(e.isTitle?('★ "'+e.label+'" صار جزءاً من اسم العرض'):('أُزيل "'+e.label+'" من اسم العرض'));
   const si=document.querySelector('.sidebar-search input'); renderSideList(si?si.value:'');
   if(currentPage==='extrafields')renderExtraFieldsPage();
 }
@@ -1648,7 +1653,21 @@ function applyNavPermissions(){
     el.style.display=canAccess(page)?'':'none';
   });
 }
-function formatSerial(n){var s=String(n);return s.length>=3?(s.slice(0,-3)||'0')+'-'+s.slice(-3):String(n);}
+function formatSerial(n){
+  if(n==null||n==='') return '';
+  if(typeof n==='string' && /[A-Za-z]/.test(n)) return n; // رمز جاهز مثل F26-001
+  var num=parseInt(n,10); if(isNaN(num)) return String(n);
+  var yr=Math.floor(num/1000), seq=num%1000;
+  return 'F'+yr+'-'+String(seq).padStart(3,'0');
+}
+// رقم تسلسلي موحّد سنوي تصاعدي عبر المعاملات العادية والمركّبة (يبدأ F{السنة}-001)
+function _serYY(){ return new Date().getFullYear()%100; }
+function _nextSerialUnified(){
+  var yy=_serYY(); var base=yy*1000; var mx=base;
+  function scan(arr){ (arr||[]).forEach(function(t){ var n=parseInt(t&&t.serial,10); if(!isNaN(n) && Math.floor(n/1000)===yy && n>mx) mx=n; }); }
+  scan(transactions); scan(compoundTxns);
+  return mx+1;
+}
 
 function loadAll(){
   try{const _v=localStorage.getItem(SK);if(_v)citizens=JSON.parse(_v);}catch(_e){}
@@ -1988,9 +2007,10 @@ function testFbConn(){
     });
 }
 function _migrateSerials(){
+  // الأرقام التسلسلية الآن سنوية (F{السنة}-NNN) وتُحسب عند الإنشاء؛ نُبقي القديمة كما هي.
   var changed=false;
-  transactions.forEach(function(t,i){if((t.serial||0)<SERIAL_START){t.serial=SERIAL_START+i;changed=true;}});
-  if(changed){try{localStorage.setItem(TK,JSON.stringify(transactions));}catch(e){} _fbSet(TK,transactions);}
+  transactions.forEach(function(t){ if(t.serial==null||isNaN(parseInt(t.serial,10))){ t.serial=_nextSerialUnified(); changed=true; } });
+  if(changed){try{localStorage.setItem(TK,JSON.stringify(transactions));}catch(e){} if(window._fbReady)_fbSet(TK,transactions);}
 }
 
 
@@ -2514,10 +2534,7 @@ function resetFieldLayout(){
 // ══════════════════════════════════════
 let _ctxnItems=[]; // temp items while building
 
-function nextCSerial(){
-  if(!compoundTxns.length)return SERIAL_START;
-  return Math.max(...compoundTxns.map(t=>t.serial||0))+1;
-}
+function nextCSerial(){ return _nextSerialUnified(); }
 
 function renderCompoundPage(){
   const mp=document.getElementById('mainPanel');
@@ -3892,10 +3909,7 @@ function selectCitizen(id){
 function todayStr(){return new Date().toLocaleDateString('ar-LB',{year:'numeric',month:'2-digit',day:'2-digit'});}
 function todayISO(){return new Date().toISOString().split('T')[0];}
 function nowTime(){return new Date().toLocaleTimeString('ar-LB',{hour:'2-digit',minute:'2-digit'});}
-function nextSerial(){
-  if(transactions.length===0)return SERIAL_START;
-  return Math.max(...transactions.map(t=>t.serial||0))+1;
-}
+function nextSerial(){ return _nextSerialUnified(); }
 
 // ===== DASHBOARD =====
 function renderDashboard(){
@@ -4449,6 +4463,7 @@ function printCitizen(){
   const el=document.getElementById('printNoteModal');
   if(el){
     _printReq=[];
+    const rc=document.getElementById('reqRecord'); if(rc)rc.checked=false;
     const t=document.getElementById('printNoteText'); if(t)t.value='';
     const nt=document.getElementById('printReqNewType'); if(nt)nt.value='';
     _renderPrintReqChips(); _renderPrintReqList();
@@ -4462,8 +4477,35 @@ function confirmPrintNote(){
   const req={items:items,note:note};
   const tgt=_reqTarget||{type:'citizen'};
   _reqTarget=null;
+  const recEl=document.getElementById('reqRecord');
+  const doRecord=recEl?!!recEl.checked:false;
   closeModal('printNoteModal');
-  if(tgt.type==='form') previewForm(tgt.fid,tgt.txnId,req);
+  let useTxnId=tgt.txnId||null;
+  if(doRecord){
+    const c=citizens.find(function(x){return x.id===currentCitId;});
+    if(c){
+      const svcText=items.map(function(it){return it.name+(it.qty>1?(' ×'+it.qty):'');}).join('، ');
+      let fmName='';
+      if(tgt.type==='form'){ const fm=forms.find(function(f){return f.id===tgt.fid;}); fmName=fm?fm.name:''; }
+      const tx={
+        id:'t_'+Date.now(), serial:nextSerial(),
+        citId:c.id, citName:citName(c),
+        type: svcText || fmName || 'طلب',
+        date:new Date().toLocaleDateString('ar-LB',{year:'numeric',month:'2-digit',day:'2-digit'}),
+        time:nowTime(),
+        note: note,
+        formId:(tgt.type==='form'?tgt.fid:null), formName:fmName||null,
+        reqItems: items,
+        cost:0, paid:0, payStatus:'غير مدفوع', profit:0
+      };
+      transactions.push(tx); saveTxns(); useTxnId=tx.id;
+      notify('🧾 سُجّلت العملية '+formatSerial(tx.serial));
+      try{ renderSideList(); }catch(_e){}
+      if(currentPage==='transactions'){try{renderTransactionsPage();}catch(_e){}}
+      else if(currentPage==='dashboard'){try{renderDashboard();}catch(_e){}}
+    }
+  }
+  if(tgt.type==='form') previewForm(tgt.fid,useTxnId,req);
   else doPrintCitizen(req);
 }
 function doPrintCitizen(req){
@@ -4708,7 +4750,6 @@ function saveQuickField(){
   const secEl=document.getElementById('qfSection'); const tab=secEl?secEl.value:'extra';
   const isTitle=!!(document.getElementById('qfIsTitle')&&document.getElementById('qfIsTitle').checked);
   const fieldId='ef_'+Date.now();
-  if(isTitle){ extraFields.forEach(x=>{ if((x.reg||'lb')===activeReg) x.isTitle=false; }); }
   extraFields.push({id:fieldId,label:name,type,options:opts,staticValue:'',reg:activeReg,isTitle});
   saveEF();
   fieldLayout.push({key:'extra_'+fieldId,tab,hidden:false,full:(type==='textarea')});
@@ -4744,7 +4785,7 @@ function renderExtraFieldsPage(){
       const e = extraFields.find(x=>x.id===f.efId) || {id:f.efId, label:f.label, type:f.type, options:f.options, staticValue:f.staticValue||''};
       const typeLabel=e.type==='today'?'📅 تاريخ اليوم تلقائي':e.type==='static'?'📌 نص ثابت: '+(e.staticValue||''):e.type;
       const opts=e.options&&e.options.length?' · '+e.options.join(' / '):'';
-      efHtml+='<div class="ef-card"><div style="flex:1;min-width:0"><div class="ef-name">'+e.label+(e.isTitle?` <span style="font-size:10px;color:var(--gold);font-weight:700">★ عنوان العرض</span>`:'')+'</div><div class="ef-type">'+typeLabel+opts+'</div></div><button class="btn btn-outline" onclick="setTitleField(\''+e.id+'\')" style="font-size:14px;padding:4px 10px" title="تعيين كعنوان العرض">'+(e.isTitle?'★':'☆')+'</button><button class="btn btn-red" onclick="delEF(\''+e.id+'\')" style="font-size:11px;padding:4px 10px">🗑️</button></div>';
+      efHtml+='<div class="ef-card"><div style="flex:1;min-width:0"><div class="ef-name">'+e.label+(e.isTitle?` <span style="font-size:10px;color:var(--gold);font-weight:700">★ اسم</span>`:'')+'</div><div class="ef-type">'+typeLabel+opts+'</div></div><button class="btn btn-outline" onclick="setTitleField(\''+e.id+'\')" style="font-size:14px;padding:4px 10px" title="إضافة/إزالة من اسم العرض">'+(e.isTitle?'★':'☆')+'</button><button class="btn btn-red" onclick="delEF(\''+e.id+'\')" style="font-size:11px;padding:4px 10px">🗑️</button></div>';
     });
   }
   
@@ -4791,7 +4832,7 @@ function renderExtraFieldsPage(){
           '<div class="form-field" id="ef_static_wrap" style="display:none"><label>النص الثابت</label><input type="text" id="ef_static_val" placeholder="مثال: البقاع، الجمهورية اللبنانية..."></div>'+
           '<div class="form-field" id="ef_static_wrap" style="display:none"><label>النص الثابت</label><input type="text" id="ef_static_val" placeholder="مثال: البقاع، الجمهورية اللبنانية..."></div>'+
         '</div>'+
-        '<div style="margin-top:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer"><input type="checkbox" id="ef_isTitle" style="width:auto"> ★ تعيين كعنوان العرض لهذا الملف</label><button class="btn btn-gold" onclick="addEF()">+ إضافة الحقل</button></div>'+
+        '<div style="margin-top:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer"><input type="checkbox" id="ef_isTitle" style="width:auto"> ★ اجعله جزءاً من اسم العرض</label><button class="btn btn-gold" onclick="addEF()">+ إضافة الحقل</button></div>'+
       '</div>'+
       '<div class="form-section-title">📝 حقول هذا الملف ('+extraFields.filter(e=>(e.reg||'lb')===activeReg).length+')</div>'+
       '<div id="efCardsContainer" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">'+efHtml+'</div>'+
@@ -4816,7 +4857,6 @@ function addEF(){
   const secEl=document.getElementById('ef_section'); const tab=secEl?secEl.value:'extra';
   const isTitle=!!(document.getElementById('ef_isTitle')&&document.getElementById('ef_isTitle').checked);
   const fieldId='ef_'+Date.now();
-  if(isTitle){ extraFields.forEach(x=>{ if((x.reg||'lb')===activeReg) x.isTitle=false; }); }
   extraFields.push({id:fieldId,label:name,type,options:opts,staticValue,reg:activeReg,isTitle});
   saveEF();
   fieldLayout.push({key:'extra_'+fieldId,tab,hidden:false,full:(type==='textarea')});
@@ -4983,10 +5023,7 @@ function printTextForm(id,citId){
 
 function previewFormPrompt(fid,txnId){
   if(!currentCitId){notify('⚠️ اختر مواطناً أولاً من القائمة','warn');return;}
-  const fm=forms.find(function(f){return f.id===fid;});
-  const needsReq=fm&&Array.isArray(fm.boxes)&&fm.boxes.some(function(b){return b.key==='__request__';});
-  if(needsReq){ _openReqModalForForm(fid,txnId); }
-  else previewForm(fid,txnId);
+  _openReqModalForForm(fid,txnId);
 }
 function _openReqModalForForm(fid,txnId){
   const el=document.getElementById('printNoteModal'); if(!el){previewForm(fid,txnId);return;}
@@ -4994,6 +5031,7 @@ function _openReqModalForForm(fid,txnId){
   _printReq=[];
   const t=document.getElementById('printNoteText'); if(t)t.value='';
   const nt=document.getElementById('printReqNewType'); if(nt)nt.value='';
+  const rc=document.getElementById('reqRecord'); if(rc)rc.checked=true;
   _renderPrintReqChips(); _renderPrintReqList();
   el.style.display='block';
 }
@@ -5018,7 +5056,7 @@ function previewForm(fid,txnId,req){
     // ملاحظات المعاملة — من المعاملة المحددة أو الأخيرة
     if(key==='txnNote') return _txn?(_txn.note||_txn.txnNote||''):'';
     // الرقم التسلسلي من المعاملة المحددة
-    if(key==='serialNumber') return _txn?'#'+formatSerial(_txn.serial):'#'+formatSerial(nextSerial());
+    if(key==='serialNumber') return _txn?formatSerial(_txn.serial):formatSerial(nextSerial());
     if(key==='serial') return (c.serial!=null?('#'+c.serial):'');
     if(key==='__request__') return '';
     return c[key]||'';
@@ -5412,6 +5450,8 @@ function fbFieldIcon(key){
   if(key.includes('registry')||key.includes('Registry')) return '📜';
   if(key.includes('national')||key.includes('passport')) return '🪪';
   if(key==='__request__') return '📋';
+  if(key==='serialNumber') return '🧾';
+  if(key==='serial') return '🔢';
   if(key.startsWith('extra_')) return '⭐';
   return '📝';
 }
@@ -5680,6 +5720,7 @@ function previewFormBuild(){
     if(key==='serialNumber') return formatSerial(nextSerial());
     if(key==='txnNote') return '[ ملاحظات المعاملة تظهر عند الطباعة ]';
     if(key==='__request__') return '[ المعاملات المطلوبة تظهر عند الطباعة ]';
+    if(key==='serial') return citizen&&citizen.serial!=null?('#'+citizen.serial):'#—';
     if(key.startsWith('extra_')){
       const efId=key.replace('extra_','');
       const ef=extraFields.find(function(e){return e.id===efId;});
@@ -6921,21 +6962,27 @@ showPage=function(page,navEl){
 
 // ===== HELPERS =====
 function getAllFields(){
-  // الرقم التسلسلي + حقول الملف النشط المخصّصة + عنصر بيان الطلب
-  const base=[{key:'serial',label:'🔢 الرقم التسلسلي'}];
+  // الرقم التسلسلي للسجل + حقول الملف النشط + رقم المعاملة + بيان الطلب
+  const base=[{key:'serial',label:'الرقم التسلسلي للسجل'}];
   extraFields.filter(ef=>(ef.reg||'lb')===activeReg).forEach(ef=>base.push({key:'extra_'+ef.id,label:ef.label}));
+  base.push({key:'serialNumber',label:'رقم المعاملة (F26-001)'});
   base.push({key:'__request__',label:'بيان الطلب (المعاملات المطلوبة)'});
   return base;
 }
 function openAddModal(){
   const rl=document.getElementById('addRegLabel'); if(rl)rl.textContent=regIcon(activeReg)+' '+regLabel(activeReg);
   const sp=document.getElementById('addSerialPreview'); if(sp)sp.textContent='#'+nextCitizenSerial(activeReg);
-  const tf=citTitleField(activeReg);
-  const wrap=document.getElementById('addTitleWrap'), lbl=document.getElementById('addTitleLabel'), inp=document.getElementById('nTitle');
-  if(inp)inp.value='';
-  if(wrap){ if(tf){ wrap.style.display=''; if(lbl)lbl.textContent=tf.label; if(inp)inp.placeholder=tf.label; } else { wrap.style.display='none'; } }
+  const host=document.getElementById('addNameFields');
+  if(host){
+    const fs=_nameFieldsFor(activeReg);
+    if(fs.length){
+      host.innerHTML='<div class="form-grid">'+fs.map(function(f){ return `<div class="form-field full"><label>${esc(f.label)}</label><input type="text" id="naddf_${f.id}" placeholder="${esc(f.label)}" onkeydown="if(event.key==='Enter')addCitizen()"></div>`; }).join('')+'</div>';
+    } else {
+      host.innerHTML='<div style="font-size:12px;color:var(--text3);padding:6px 0;line-height:1.8">لم تُعيّن حقول اسم بعد. يُنشأ السجل برقمه التسلسلي الآن — علّم الحقول التي تُكوّن الاسم بنجمة ★ من شاشة «الحقول المخصصة» لتظهر هنا وفي القوائم.</div>';
+    }
+  }
   document.getElementById('addModal').style.display='block';
-  if(tf&&inp)setTimeout(()=>inp.focus(),100);
+  const first=document.querySelector('#addNameFields input'); if(first)setTimeout(function(){first.focus();},100);
 }
 function closeModal(id){
   document.getElementById(id).style.display='none';
@@ -6946,8 +6993,7 @@ function closeModal(id){
 function addCitizen(){
   const reg=activeReg;
   const c={id:Date.now().toString(),reg,serial:nextCitizenSerial(reg),extra:{},createdAt:Date.now(),updatedAt:Date.now()};
-  const tf=citTitleField(reg);
-  if(tf){ const el=document.getElementById('nTitle'); const v=el?(el.value||'').trim():''; if(v)c.extra[tf.id]=v; }
+  _nameFieldsFor(reg).forEach(function(f){ const el=document.getElementById('naddf_'+f.id); if(el){ const v=(el.value||'').trim(); if(v)c.extra[f.id]=v; } });
   citizens.unshift(c);saveC();closeModal('addModal');
   const si=document.querySelector('.sidebar-search input'); renderSideList(si?si.value:'');
   selectCitizen(c.id);notify('✅ تمت إضافة السجل #'+c.serial+' في ملف '+regLabel(reg));
@@ -7192,6 +7238,9 @@ function pickForm(i){
         <label>إضافات / ملاحظة خاصة (اختياري)</label>
         <textarea id="printNoteText" rows="2" placeholder="مثال: مستعجل، نسخة مصدّقة، تسليم لشخص آخر..." style="padding:10px 12px;background:var(--navy3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:Cairo,sans-serif;font-size:14px;resize:vertical;direction:rtl;line-height:1.8;width:100%" onkeydown="if(event.ctrlKey&&event.key==='Enter'){confirmPrintNote();}"></textarea>
       </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text2);cursor:pointer;margin-bottom:10px;padding:9px 11px;background:var(--navy3);border:1px solid var(--border);border-radius:8px">
+        <input type="checkbox" id="reqRecord" checked style="width:auto"> 🧾 تسجيل هذه العملية في سجل المعاملات
+      </label>
       <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Ctrl+Enter للطباعة السريعة</div>
       <div class="modal-actions">
         <button class="btn btn-gold" onclick="confirmPrintNote()" style="flex:1;justify-content:center;font-size:14px;padding:10px">🖨️ طباعة</button>
