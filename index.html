@@ -286,6 +286,11 @@ body{font-family:'Cairo',sans-serif;background:var(--navy);color:var(--text);min
 .nat-st{background:rgba(100,100,100,0.2);color:#AAA;}
 .nat-ot{background:rgba(180,100,200,0.15);color:#CC99EE;}
 .add-cit-btn{margin:8px;width:calc(100% - 16px);padding:8px;background:rgba(201,168,76,0.1);border:1px dashed var(--gold3);border-radius:8px;color:var(--gold);font-family:'Cairo',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;}
+.reg-btn{display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 11px;background:var(--navy3);border:1px solid var(--border);border-radius:9px;color:var(--text2);font-family:'Cairo',sans-serif;font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s;}
+.reg-btn:hover{background:var(--navy2);color:var(--text);}
+.reg-btn.active{background:rgba(201,168,76,0.16);border-color:var(--gold3);color:var(--gold);}
+.reg-btn .reg-c{font-size:10px;background:var(--navy);color:var(--text3);padding:1px 8px;border-radius:10px;min-width:22px;text-align:center;font-weight:700;}
+.reg-btn.active .reg-c{background:var(--gold3);color:var(--navy);}
 .add-cit-btn:hover{background:rgba(201,168,76,0.18);}
 
 /* MAIN */
@@ -719,7 +724,12 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
         </div>
       </div>
       <div class="sidebar-sep"></div>
-      <div class="sidebar-section"><div class="sidebar-label">المواطنون</div></div>
+      <div class="sidebar-section"><div class="sidebar-label">الملفات حسب الجنسية</div></div>
+      <div class="reg-switch" id="regSwitch" style="display:flex;flex-direction:column;gap:4px;padding:0 10px 8px">
+        <button class="reg-btn active" data-reg="lb" onclick="setActiveReg('lb')"><span>🇱🇧 لبناني</span><span class="reg-c" id="regC_lb">0</span></button>
+        <button class="reg-btn" data-reg="sy" onclick="setActiveReg('sy')"><span>🇸🇾 سوري</span><span class="reg-c" id="regC_sy">0</span></button>
+        <button class="reg-btn" data-reg="pa" onclick="setActiveReg('pa')"><span>🇵🇸 فلسطيني</span><span class="reg-c" id="regC_pa">0</span></button>
+      </div>
       <div class="sidebar-search"><input type="text" placeholder="بحث سريع..." oninput="sideSearch(this.value)"><span class="s-ico">🔍</span></div>
       <div class="cit-list" id="sideList"></div>
       <button class="add-cit-btn" onclick="openAddModal()">+ إضافة مواطن</button>
@@ -733,16 +743,12 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
 <div id="addModal" style="display:none">
   <div class="modal-overlay">
     <div class="modal-box">
-      <div class="modal-title">👤 إضافة مواطن جديد</div>
+      <div class="modal-title">➕ إضافة سجل جديد</div>
+      <div style="font-size:12.5px;color:var(--text2);margin-bottom:14px;line-height:2;background:var(--navy3);border:1px solid var(--border);border-radius:9px;padding:10px 12px">الملف: <span id="addRegLabel" style="color:var(--gold);font-weight:700">—</span><br>الرقم التسلسلي التالي: <span id="addSerialPreview" style="color:#7DCCA0;font-weight:700">#1</span></div>
       <div class="form-grid">
-        <div class="form-field"><label>الاسم الأول *</label><input type="text" id="nFirst" placeholder="الاسم الأول"></div>
-        <div class="form-field"><label>اسم الأب</label><input type="text" id="nFather" placeholder="اسم الأب"></div>
-        <div class="form-field"><label>الشهرة / اللقب</label><input type="text" id="nLast" placeholder="الشهرة"></div>
-        <div class="form-field"><label>رقم السجل</label><input type="text" id="nReg" placeholder="رقم السجل"></div>
-        <div class="form-field full"><label>الجنسية</label>
-          <select id="nNat"><option value="لبناني">🇱🇧 لبناني</option><option value="سوري">🇸🇾 سوري</option><option value="فلسطيني">🇵🇸 فلسطيني</option><option value="عراقي">🇮🇶 عراقي</option><option value="غير محدد">⚪ غير محدد / عديم الجنسية</option><option value="أخرى">🌍 أخرى</option></select>
-        </div>
+        <div class="form-field full" id="addTitleWrap"><label id="addTitleLabel">العنوان</label><input type="text" id="nTitle" placeholder="اكتب هنا..." onkeydown="if(event.key==='Enter')addCitizen()"></div>
       </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px">اترك الحقل فارغاً وعبّئ بقية الحقول لاحقاً من شاشة السجل.</div>
       <div class="modal-actions"><button class="btn btn-gold" onclick="addCitizen()">✓ إضافة</button><button class="btn btn-outline" onclick="closeModal('addModal')">إلغاء</button></div>
     </div>
   </div>
@@ -1016,6 +1022,13 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
             <option value="textarea">📄 نص طويل</option>
           </select>
         </div>
+        <div class="form-field">
+          <label>القسم الذي يظهر فيه</label>
+          <select id="qfSection" style="padding:9px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px;direction:rtl;width:100%">
+            <option value="personal">👤 شخصية</option><option value="registry">📜 نفوس</option><option value="address">📍 عنوان</option><option value="docs">🪪 وثائق</option><option value="extra" selected>➕ إضافية</option>
+          </select>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer"><input type="checkbox" id="qfIsTitle" style="width:auto"> ★ تعيين كعنوان العرض في القوائم</label>
         <div class="form-field" id="qfOptsWrap" style="display:none">
           <label>خيارات القائمة (مفصولة بفاصلة)</label>
           <input type="text" id="qfOpts" placeholder="خيار1, خيار2, خيار3">
@@ -1132,6 +1145,93 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
 <script>
 // ===== STATE =====
 let citizens=[],extraFields=[],forms=[],textForms=[],transactions=[],debts=[],stamps=[],cashEntries=[],serviceTypes=[],stampCategories=[],stampGroups=[],waTemplates=[],agents=[],compoundTxns=[];
+// ═══════════════════════════════════════════════════════════════
+//  نظام الملفات حسب الجنسية (لبناني / سوري / فلسطيني)
+//  قائمة واحدة + فلترة، وكل ملف له حقوله ونماذجه وحقل عنوانه الخاص.
+// ═══════════════════════════════════════════════════════════════
+const REGS=[
+  {id:'lb',label:'لبناني',cls:'nat-lb',icon:'🇱🇧'},
+  {id:'sy',label:'سوري',cls:'nat-sy',icon:'🇸🇾'},
+  {id:'pa',label:'فلسطيني',cls:'nat-pa',icon:'🇵🇸'}
+];
+let activeReg='lb';
+function regOf(c){ const r=c&&c.reg; return REGS.some(x=>x.id===r)?r:'lb'; }
+function regLabel(r){ const o=REGS.find(x=>x.id===r); return o?o.label:'—'; }
+function regCls(r){ const o=REGS.find(x=>x.id===r); return o?o.cls:'nat-st'; }
+function regIcon(r){ const o=REGS.find(x=>x.id===r); return o?o.icon:''; }
+function regCount(reg){ return citizens.filter(c=>regOf(c)===reg).length; }
+// حقل العنوان المعيّن لكل ملف (أو null)
+function citTitleField(reg){ return extraFields.find(e=>(e.reg||'lb')===reg && e.isTitle) || null; }
+// اسم العرض: قيمة حقل العنوان إن وُجد، وإلا الرقم التسلسلي (#N)، وإلا فارغ
+function citName(c){
+  if(!c) return '';
+  const tf=citTitleField(regOf(c));
+  if(tf){ const v=((c.extra||{})[tf.id]||'').toString().trim(); if(v) return v; }
+  return (c.serial!=null && c.serial!=='') ? ('#'+c.serial) : '';
+}
+// الرقم التسلسلي التالي ضمن ملف معيّن (يبدأ من 1 لكل ملف)
+function nextCitizenSerial(reg){
+  const nums=citizens.filter(c=>regOf(c)===reg).map(c=>parseInt(c.serial)||0);
+  return (nums.length?Math.max.apply(null,nums):0)+1;
+}
+function updateRegCounts(){ REGS.forEach(r=>{ const el=document.getElementById('regC_'+r.id); if(el)el.textContent=regCount(r.id); }); }
+function setActiveReg(r){
+  if(!REGS.some(x=>x.id===r))return;
+  if(currentPage==='citizen_detail'){ const cc=_captureCitizenFields(); if(cc){cc.updatedAt=Date.now();saveC();} }
+  activeReg=r;
+  document.querySelectorAll('.reg-btn').forEach(b=>b.classList.toggle('active', b.dataset.reg===r));
+  const cur=citizens.find(c=>c.id===currentCitId);
+  if(cur && regOf(cur)!==r) currentCitId=null;
+  const si=document.querySelector('.sidebar-search input');
+  renderSideList(si?si.value:'');
+  const regPages=['citizens','citizen_detail','extrafields','fieldmanager','forms','textforms','formbuilder','reports','broadcast'];
+  if(regPages.includes(currentPage)){
+    if(currentPage==='citizen_detail' && !currentCitId) showPage('citizens');
+    else showPage(currentPage);
+  }
+}
+function setTitleField(efId){
+  const e=extraFields.find(x=>x.id===efId); if(!e)return;
+  const reg=e.reg||'lb';
+  const turnOn=!e.isTitle;
+  extraFields.forEach(x=>{ if((x.reg||'lb')===reg) x.isTitle=false; });
+  e.isTitle=turnOn;
+  saveEF();
+  notify(turnOn?('★ "'+e.label+'" أصبح عنوان العرض لهذا الملف'):'أُلغي تعيين حقل العنوان');
+  const si=document.querySelector('.sidebar-search input'); renderSideList(si?si.value:'');
+  if(currentPage==='extrafields')renderExtraFieldsPage();
+}
+// ═══ نسخة احتياطية / استرجاع كل البيانات ═══
+function exportAllData(){
+  const data={_app:'mokhtar',_ver:'files-v1',_date:new Date().toISOString(),
+    citizens,extraFields,fieldLayout,forms,textForms,transactions,debts,stamps,cashEntries,serviceTypes,stampCategories,stampGroups,waTemplates,agents,compoundTxns};
+  try{
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='نسخة_احتياطية_'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    notify('✅ تم تنزيل النسخة الاحتياطية');
+  }catch(e){ notify('❌ تعذّر التصدير','red'); }
+}
+function importAllData(input){
+  const file=input&&input.files&&input.files[0]; if(!file)return;
+  if(!confirm('استيراد سيستبدل كل البيانات الحالية بمحتوى الملف. متابعة؟')){input.value='';return;}
+  const r=new FileReader();
+  r.onload=function(){
+    try{
+      const d=JSON.parse(r.result);
+      const keys=['citizens','extraFields','fieldLayout','forms','textForms','transactions','debts','stamps','cashEntries','serviceTypes','stampCategories','stampGroups','waTemplates','agents','compoundTxns'];
+      keys.forEach(k=>{ if(Array.isArray(d[k])) window[k]=d[k]; });
+      try{saveC();saveEF();saveFieldLayout();saveForms();saveTextForms();}catch(_e){}
+      try{if(typeof saveAll==='function')saveAll();}catch(_e){}
+      notify('✅ تم الاستيراد — جارٍ إعادة التحميل'); setTimeout(()=>location.reload(),900);
+    }catch(e){ notify('❌ ملف غير صالح','red'); }
+  };
+  r.readAsText(file); input.value='';
+}
+
 // agents: [{id, name, phone, items:[{id,date,type,desc,txnId,status,returnDate,notes,cost}], payments:[{id,date,amount,note}]}]
 // compoundTxns: [{id,serial,citId,citName,phone,date,items:[{desc,agentId,agentCost,citizenPrice,status}],totalCitizen,totalAgentCost,profit,note,payStatus,paid}]
 let fieldLayout=[]; // {key, label, tab, hidden, isExtra}
@@ -1978,7 +2078,7 @@ const DEFAULT_FIELDS_DOCS=[
   {key:'residentId',label:'رقم الإقامة',tab:'docs'},{key:'residentExp',label:'انتهاء الإقامة',tab:'docs',type:'date'},
   {key:'statelessDoc',label:'وثيقة عديم الجنسية',tab:'docs'},{key:'refugeeNum',label:'رقم اللاجئ UNHCR',tab:'docs'},
 ];
-const ALL_DEFAULT_FIELDS=[...DEFAULT_FIELDS_PERSONAL,...DEFAULT_FIELDS_ADDRESS,...DEFAULT_FIELDS_REGISTRY,...DEFAULT_FIELDS_DOCS];
+const ALL_DEFAULT_FIELDS=[]; // ✅ أُزيلت كل الحقول الافتراضية — كل حقل الآن مخصّص لكل ملف ويُضيفه المستخدم
 // ══════════════════════════════════════════════════════════════════════════
 //  نظام الحقول — مصدر واحد لكل معلومة
 //  • التعريفات: الافتراضية في ALL_DEFAULT_FIELDS ، المخصّصة في extraFields (مكان واحد لكل حقل).
@@ -1999,7 +2099,7 @@ function _descriptor(key, le){
     return {key:'extra_'+efId, label:e.label, tab:(le&&le.tab)||'extra',
             type:e.type||'text', options:e.options||[],
             hidden:!!(le&&le.hidden), full:(le&&le.full!=null)?!!le.full:(e.type==='textarea'),
-            isExtra:true, efId:efId, staticValue:e.staticValue||''};
+            isExtra:true, efId:efId, staticValue:e.staticValue||'', reg:e.reg||'lb', isTitle:!!e.isTitle};
   }
   const d=ALL_DEFAULT_FIELDS.find(x=>x.key===key);
   if(!d) return null; // حقل افتراضي غير معروف ⟵ يُتجاهل
@@ -2011,20 +2111,42 @@ function _descriptor(key, le){
 function _leanField(d){ return {key:d.key, tab:d.tab, hidden:!!d.hidden, full:!!d.full}; }
 // الدالة الوحيدة: تُعيد قائمة الأوصاف الكاملة بترتيبها، كاملة (كل الافتراضية والمخصّصة) وبلا تكرار.
 function getEffectiveLayout(){
+  // ✅ يُرجع حقول الملف النشط فقط (activeReg)
   const out=[], seen=new Set();
   (fieldLayout||[]).forEach(le=>{
     if(!le||!le.key||seen.has(le.key))return;
     const d=_descriptor(le.key, le); if(!d)return;
+    if(d.reg!==activeReg)return;
     seen.add(d.key); out.push(d);
   });
-  ALL_DEFAULT_FIELDS.forEach(df=>{ if(!seen.has(df.key)){ const d=_descriptor(df.key,null); if(d){seen.add(d.key);out.push(d);} } });
-  extraFields.forEach(e=>{ const k='extra_'+e.id; if(!seen.has(k)){ const d=_descriptor(k,null); if(d){seen.add(d.key);out.push(d);} } });
+  extraFields.forEach(e=>{ const k='extra_'+e.id; if(!seen.has(k) && (e.reg||'lb')===activeReg){ const d=_descriptor(k,null); if(d){seen.add(d.key);out.push(d);} } });
   return out;
 }
-// يُستدعى مرة عند الإقلاع: يحوّل أي تخطيط قديم/تالف إلى الشكل النحيف الموحّد مع حفظ الترتيب.
+// تطبيع التخطيط عند الإقلاع: يزيل المكرر والحقول المحذوفة ويحفظ كل الملفات (لا يقتصر على النشط).
 function migrateAndNormalizeFields(){
-  fieldLayout=getEffectiveLayout().map(_leanField);
+  const seen=new Set(), out=[];
+  (fieldLayout||[]).forEach(le=>{
+    if(!le||!le.key||seen.has(le.key))return;
+    if(!extraFields.find(e=>'extra_'+e.id===le.key))return; // الحقل لم يعد موجوداً
+    seen.add(le.key); out.push({key:le.key, tab:le.tab||'extra', hidden:!!le.hidden, full:!!le.full});
+  });
+  extraFields.forEach(e=>{ const k='extra_'+e.id; if(!seen.has(k)){ seen.add(k); out.push({key:k, tab:'extra', hidden:false, full:(e.type==='textarea')}); } });
+  fieldLayout=out;
   try{localStorage.setItem(FLK,JSON.stringify(fieldLayout));}catch(e){}
+}
+// الملف الذي ينتمي إليه مفتاح حقل في التخطيط
+function _regOfLayoutKey(key){
+  const k=String(key||''); const efId=k.indexOf('extra_')===0?k.slice(6):null;
+  if(!efId)return 'lb';
+  const e=extraFields.find(x=>x.id===efId);
+  return e?(e.reg||'lb'):'lb';
+}
+// يستبدل ترتيب حقول الملف النشط فقط ويُبقي بقية الملفات كما هي
+function _commitActiveLayout(activeDescriptors){
+  const others=(fieldLayout||[]).filter(e=>_regOfLayoutKey(e.key)!==activeReg);
+  const active=(activeDescriptors||[]).map(_leanField);
+  fieldLayout=others.concat(active);
+  saveFieldLayout();
 }
 // ===== AUTH =====
 function doLogin(){
@@ -2329,8 +2451,7 @@ function fieldMoveInTab(key,dir){
   tabKeys[at]=tabKeys[to]; tabKeys[to]=key; // تبديل الموضعين
   const byKey={}; full.forEach(f=>byKey[f.key]=f);
   let ti=0;
-  fieldLayout=full.map(f=> f.tab===tab ? byKey[tabKeys[ti++]] : f); // أعد بناء القائمة بالترتيب الجديد للقسم
-  saveFieldLayout();
+  _commitActiveLayout(full.map(f=> f.tab===tab ? byKey[tabKeys[ti++]] : f));
   _refreshFieldsUI();
 }
 function _fieldSetTab(key,newTab){
@@ -2342,8 +2463,7 @@ function _fieldSetTab(key,newTab){
   let insertAt=full.length;
   for(let i=full.length-1;i>=0;i--){ if(full[i].tab===newTab){ insertAt=i+1; break; } } // بعد آخر حقل في القسم الهدف
   full.splice(insertAt,0,item);
-  fieldLayout=full;
-  saveFieldLayout();
+  _commitActiveLayout(full);
   return true;
 }
 function fieldMoveToTab(key,newTab){ // من صفحة "ترتيب الحقول"
@@ -2364,8 +2484,7 @@ function deleteExtraFieldFromManager(efId,label){
 function toggleFieldHidden(key){
   const eff=getEffectiveLayout();
   if(!eff.find(x=>x.key===key))return;
-  fieldLayout=eff.map(x=>x.key===key?{...x,hidden:!x.hidden}:x).map(_leanField);
-  saveFieldLayout();
+  _commitActiveLayout(eff.map(x=>x.key===key?{...x,hidden:!x.hidden}:x));
   _refreshFieldsUI();
 }
 function saveFieldLayoutFromPage(){
@@ -2381,8 +2500,7 @@ function saveFieldLayoutFromPage(){
     });
   });
   if(!newLayout.length)return;
-  fieldLayout=newLayout;
-  saveFieldLayout();
+  _commitActiveLayout(newLayout);
   notify('✅ تم حفظ الترتيب');
 }
 function resetFieldLayout(){
@@ -2567,9 +2685,9 @@ function deleteCompound(id){
 function searchCtxnCit(v){
   const sug=document.getElementById('ctCitSug');
   if(!v||v.length<2){sug.innerHTML='';return;}
-  const hits=citizens.filter(c=>(c.firstName+' '+c.fatherName+' '+c.lastName).includes(v)).slice(0,5);
+  const hits=citizens.filter(c=>(citName(c)).includes(v)).slice(0,5);
   sug.innerHTML=hits.length===0?'':`<div style="position:absolute;top:2px;right:0;left:0;background:var(--navy2);border:1px solid var(--border2);border-radius:8px;z-index:50;overflow:hidden">
-    ${hits.map(c=>`<div onclick="document.getElementById('ctCitName').value='${c.firstName} ${c.fatherName} ${c.lastName}';document.getElementById('ctCitId').value='${c.id}';document.getElementById('ctPhone').value='${c.phone||''}';document.getElementById('ctCitSug').innerHTML=''" style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid var(--border)" onmouseenter="this.style.background='var(--navy3)'" onmouseleave="this.style.background=''">${c.firstName} ${c.fatherName} ${c.lastName} <span style="color:var(--text3)">· ${c.registryNum||''}</span></div>`).join('')}
+    ${hits.map(c=>`<div onclick="document.getElementById('ctCitName').value='${citName(c)}';document.getElementById('ctCitId').value='${c.id}';document.getElementById('ctPhone').value='${c.phone||''}';document.getElementById('ctCitSug').innerHTML=''" style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid var(--border)" onmouseenter="this.style.background='var(--navy3)'" onmouseleave="this.style.background=''">${citName(c)} <span style="color:var(--text3)">· ${regLabel(regOf(c))} 🔢#${c.serial!=null?c.serial:'—'}</span></div>`).join('')}
   </div>`;
 }
 
@@ -2769,7 +2887,7 @@ function renderAgentTab(tab,ag){
             📅 أُرسل: ${i.date||'—'}
             ${i.returnDate?` · ✅ استُرجع: ${i.returnDate}`:''}
             ${txn?` · معاملة <span style="color:var(--gold)">#${formatSerial(txn.serial)}</span>`:''}
-            ${cit?` · ${cit.firstName||''} ${cit.lastName||''}`: (i.citizenName?` · ${i.citizenName}`:'')}
+            ${cit?` · ${citName(cit)}`: (i.citizenName?` · ${i.citizenName}`:'')}
           </div>
           ${i.notes?`<div style="font-size:11px;color:var(--text2);margin-top:4px;padding:4px 8px;background:var(--navy3);border-radius:5px">${i.notes}</div>`:''}
         </div>
@@ -3030,9 +3148,9 @@ function renderBroadcastPage(){
         <div style="font-size:12px;font-weight:600;color:var(--gold3);letter-spacing:1px;margin-bottom:12px">🎯 المستهدفون</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2)"><input type="radio" name="bcTarget" value="all" checked onchange="updateBcCount()" style="accent-color:var(--gold)"> الكل (${withPhone.length})</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2)"><input type="radio" name="bcTarget" value="lb" onchange="updateBcCount()" style="accent-color:var(--gold)"> لبنانيون فقط (${citizens.filter(c=>c.phone&&(c.nationality||'').includes('لبناني')).length})</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2)"><input type="radio" name="bcTarget" value="sy" onchange="updateBcCount()" style="accent-color:var(--gold)"> سوريون (${citizens.filter(c=>c.phone&&(c.nationality||'').includes('سوري')).length})</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2)"><input type="radio" name="bcTarget" value="pa" onchange="updateBcCount()" style="accent-color:var(--gold)"> فلسطينيون (${citizens.filter(c=>c.phone&&(c.nationality||'').includes('فلسطيني')).length})</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2)"><input type="radio" name="bcTarget" value="lb" onchange="updateBcCount()" style="accent-color:var(--gold)"> لبنانيون فقط (${citizens.filter(c=>c.phone&&regOf(c)==='lb').length})</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2)"><input type="radio" name="bcTarget" value="sy" onchange="updateBcCount()" style="accent-color:var(--gold)"> سوريون (${citizens.filter(c=>c.phone&&regOf(c)==='sy').length})</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2)"><input type="radio" name="bcTarget" value="pa" onchange="updateBcCount()" style="accent-color:var(--gold)"> فلسطينيون (${citizens.filter(c=>c.phone&&regOf(c)==='pa').length})</label>
         </div>
         <div style="font-size:12px;color:var(--text3)">سيُرسل إلى: <strong id="bcCountLbl" style="color:var(--gold)">${withPhone.length}</strong> مواطن</div>
       </div>
@@ -3048,7 +3166,7 @@ function renderBroadcastPage(){
 function previewBroadcast(){
   const msg=document.getElementById('broadcastMsg').value;
   const sample=citizens.find(c=>c.phone)||{firstName:'أحمد',fatherName:'محمد',lastName:'الحسن'};
-  const name=(sample.firstName||'')+' '+(sample.fatherName||'');
+  const name=citName(sample)||((sample.firstName||'')+' '+(sample.fatherName||''));
   document.getElementById('broadcastPreview').textContent=msg.replace(/{الاسم}/g,name.trim())||'—';
 }
 function updateBcCount(){
@@ -3059,9 +3177,9 @@ function updateBcCount(){
 function getBcTargetList(target){
   return citizens.filter(c=>{
     if(!c.phone||!c.phone.trim())return false;
-    if(target==='lb')return(c.nationality||'').includes('لبناني');
-    if(target==='sy')return(c.nationality||'').includes('سوري');
-    if(target==='pa')return(c.nationality||'').includes('فلسطيني');
+    if(target==='lb')return regOf(c)==='lb';
+    if(target==='sy')return regOf(c)==='sy';
+    if(target==='pa')return regOf(c)==='pa';
     return true;
   });
 }
@@ -3079,7 +3197,7 @@ function startBroadcast(){
       return;
     }
     const c=list[idx];
-    const name=((c.firstName||'')+' '+(c.fatherName||'')).trim();
+    const name=(citName(c)).trim();
     const text=msg.replace(/{الاسم}/g,name);
     let phone=c.phone.replace(/\D/g,'');
     if(phone.startsWith('0'))phone='961'+phone.slice(1);
@@ -3277,7 +3395,7 @@ function previewReport(){
                 <td style="color:var(--gold);font-weight:700;white-space:nowrap">#${formatSerial(t.serial)}</td>
                 <td style="white-space:nowrap;direction:ltr;text-align:right">${t.date||'—'}</td>
                 <td>${t.type||'—'}</td>
-                <td style="font-weight:600;color:var(--text)">${cit.firstName||t.citName||'—'}</td>
+                <td style="font-weight:600;color:var(--text)">${citName(cit)||t.citName||'—'}</td>
                 <td>${cit.fatherName||'—'}</td>
                 <td>${cit.lastName||'—'}</td>
                 <td style="direction:ltr;text-align:right">${t.phone||cit.phone||'—'}</td>
@@ -3301,7 +3419,7 @@ function printReport(){
       <td style="color:#8B6914;font-weight:700;text-align:center">#${formatSerial(t.serial)}</td>
       <td style="direction:ltr;text-align:center;white-space:nowrap">${t.date||'—'}</td>
       <td>${(t.type||'—').replace(/</g,'&lt;')}</td>
-      <td style="font-weight:600">${(cit.firstName||t.citName||'—').replace(/</g,'&lt;')}</td>
+      <td style="font-weight:600">${(citName(cit)||t.citName||'—').replace(/</g,'&lt;')}</td>
       <td>${(cit.fatherName||'—').replace(/</g,'&lt;')}</td>
       <td>${(cit.lastName||'—').replace(/</g,'&lt;')}</td>
       <td style="direction:ltr;text-align:center">${(t.phone||cit.phone||'—').replace(/</g,'&lt;')}</td>
@@ -3385,15 +3503,15 @@ function doGlobalSearch(v){
   if(!res)return;
   if(!v||v.trim().length<2){res.innerHTML='';res.style.display='none';return;}
   const q=v.trim().toLowerCase();
-  const citHits=citizens.filter(c=>(c.firstName+' '+c.fatherName+' '+c.lastName).toLowerCase().includes(q)||(c.registryNum||'').includes(q)||(c.phone||'').includes(q)||(c.nationalId||'').includes(q)).slice(0,5);
+  const citHits=citizens.filter(c=>citName(c).toLowerCase().includes(q)||(''+(c.serial||'')).includes(q)).slice(0,6);
   const txnHits=transactions.filter(t=>(t.citName||'').toLowerCase().includes(q)||(t.type||'').toLowerCase().includes(q)||(t.serial+'').includes(q)).slice(0,4);
   const agHits=agents.filter(a=>a.name.toLowerCase().includes(q)||(a.phone||'').includes(q)).slice(0,2);
   let html='';
   if(citHits.length){
     html+=`<div style="padding:8px 12px;font-size:10px;color:var(--text3);font-weight:600;letter-spacing:1px;border-bottom:1px solid var(--border)">👥 المواطنون</div>`;
     html+=citHits.map(c=>`<div onclick="selectCitizen('${c.id}');hideGlobalResults();document.getElementById('globalSearch').value=''" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s" onmouseenter="this.style.background='var(--navy3)'" onmouseleave="this.style.background=''">
-      <div style="font-size:13px;font-weight:600;color:var(--text)">${c.firstName||''} ${c.fatherName||''} ${c.lastName||''}</div>
-      <div style="font-size:11px;color:var(--text3)">${c.nationality||''} · ${c.registryNum||''} · ${c.phone||''}</div>
+      <div style="font-size:13px;font-weight:600;color:var(--text)">${esc(citName(c))||('سجل #'+(c.serial!=null?c.serial:'—'))}</div>
+      <div style="font-size:11px;color:var(--text3)">${regIcon(regOf(c))} ${regLabel(regOf(c))} · 🔢 #${c.serial!=null?c.serial:'—'}</div>
     </div>`).join('');
   }
   if(txnHits.length){
@@ -3436,7 +3554,7 @@ function printAgentReport(agId){
       <td style="text-align:center">${i.date||'—'}</td>
       <td>${(i.desc||'—').replace(/</g,'&lt;')}</td>
       <td>${(i.type||'—').replace(/</g,'&lt;')}</td>
-      <td>${(cit?`${cit.firstName||''} ${cit.fatherName||''} ${cit.lastName||''}`:i.citizenName||'—').replace(/</g,'&lt;')}</td>
+      <td>${(cit?`${citName(cit)}`:i.citizenName||'—').replace(/</g,'&lt;')}</td>
       <td style="text-align:center">${i.returnDate||'—'}</td>
       <td style="text-align:center"><span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;background:${statusBg[i.status]||'#eee'};color:${statusColor[i.status]||'#333'}">${i.status}</span></td>
       <td style="text-align:left">${i.cost?i.cost.toLocaleString():''}</td>
@@ -3533,16 +3651,16 @@ function openCompoundTxnModalForCit(){
   const c=citizens.find(x=>x.id===currentCitId);
   if(c){
     _cmpCitId=c.id;
-    document.getElementById('cmpCitName').value=`${c.firstName||''} ${c.fatherName||''} ${c.lastName||''}`;
+    document.getElementById('cmpCitName').value=`${citName(c)}`;
     if(c.phone)document.getElementById('cmpPhone').value=c.phone;
   }
 }
 function searchCmpCit(v){
   const sug=document.getElementById('cmpCitSug');
   if(!v||v.length<2){sug.innerHTML='';return;}
-  const hits=citizens.filter(c=>(c.firstName+' '+c.fatherName+' '+c.lastName).includes(v)).slice(0,5);
+  const hits=citizens.filter(c=>(citName(c)).includes(v)).slice(0,5);
   sug.innerHTML=hits.length===0?'':`<div style="position:absolute;top:0;right:0;left:0;background:var(--navy2);border:1px solid var(--border2);border-radius:8px;z-index:50;overflow:hidden">
-    ${hits.map(c=>`<div onclick="selectCmpCit('${c.id}','${esc(c.firstName+' '+c.fatherName+' '+c.lastName)}')" style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid var(--border)" onmouseenter="this.style.background='var(--navy3)'" onmouseleave="this.style.background=''">${c.firstName||''} ${c.fatherName||''} ${c.lastName||''}</div>`).join('')}
+    ${hits.map(c=>`<div onclick="selectCmpCit('${c.id}','${esc(citName(c))}')" style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid var(--border)" onmouseenter="this.style.background='var(--navy3)'" onmouseleave="this.style.background=''">${citName(c)}</div>`).join('')}
   </div>`;
 }
 function selectCmpCit(id,name){
@@ -3722,19 +3840,21 @@ ${t.note?`<div style="padding:8px 12px;background:#f9f9f9;border-right:3px solid
 }
 
 function renderSideList(filter=''){
-  const f=filter.toLowerCase();
-  const list=document.getElementById('sideList');
-  const fil=citizens.filter(c=>(c.firstName+' '+c.fatherName+' '+c.lastName).toLowerCase().includes(f)||(c.registryNum||'').includes(f));
-  document.getElementById('navCount').textContent=citizens.length;
-  document.getElementById('navTxnCount').textContent=transactions.length;
-  updateTopStats();
-  list.innerHTML=fil.length===0?'<div style="padding:10px;font-size:11px;color:var(--text3);text-align:center">لا نتائج</div>':
-    fil.map(c=>{
+  const f=(filter||'').toLowerCase();
+  const list=document.getElementById('sideList'); if(!list)return;
+  const inReg=citizens.filter(c=>regOf(c)===activeReg);
+  const fil=inReg.filter(c=>citName(c).toLowerCase().includes(f)||(''+(c.serial||'')).includes(f));
+  const nc=document.getElementById('navCount'); if(nc)nc.textContent=citizens.length;
+  const tc=document.getElementById('navTxnCount'); if(tc)tc.textContent=transactions.length;
+  updateRegCounts(); updateTopStats();
+  list.innerHTML=fil.length===0?'<div style="padding:10px;font-size:11px;color:var(--text3);text-align:center">لا سجلات في هذا الملف</div>':
+    fil.slice().sort((a,b)=>(parseInt(a.serial)||0)-(parseInt(b.serial)||0)).map(c=>{
       const citDebts=debts.filter(d=>d.txnRef&&transactions.find(t=>t.id===d.txnRef&&t.citId===c.id)&&d.status!=='مسدّد');
       const debtBadge=citDebts.length?`<span style="background:rgba(201,76,76,0.25);color:#E88080;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700">دين ${citDebts.reduce((s,d)=>s+(d.remaining||0),0).toLocaleString()}</span>`:'';
+      const nm=citName(c); const disp=(nm&&nm.charAt(0)!=='#')?nm:('سجل #'+(c.serial!=null?c.serial:'—'));
       return`<div class="cit-item ${c.id===currentCitId?'active':''}" onclick="selectCitizen('${c.id}')">
-        <div class="cit-name">${c.firstName||''} ${c.fatherName||''} ${c.lastName||''}</div>
-        <div class="cit-meta"><span class="cit-nat ${natClass(c.nationality)}">${c.nationality||'—'}</span><span>${c.registryNum||'—'}</span>${debtBadge}</div>
+        <div class="cit-name">${esc(disp)}</div>
+        <div class="cit-meta"><span class="cit-nat ${regCls(regOf(c))}">🔢 #${c.serial!=null?c.serial:'—'}</span>${debtBadge}</div>
       </div>`;
     }).join('');
 }
@@ -3749,20 +3869,23 @@ function natClass(n){
 }
 function sideSearch(v){renderSideList(v);}
 function updateTopStats(){
-  const lb=citizens.filter(c=>(c.nationality||'').includes('لبناني')).length;
-  const other=citizens.length-lb;
+  const lb=regCount('lb'), sy=regCount('sy'), pa=regCount('pa');
   const todayTxn=transactions.filter(t=>t.date===todayStr()).length;
-  document.getElementById('tnStats').innerHTML=`
-    <div class="tnstat"><div class="dot" style="background:var(--gold)"></div><span>مسجلون:</span><strong>${citizens.length}</strong></div>
-    <div class="tnstat"><div class="dot" style="background:#88BBE8"></div><span>لبنانيون:</span><strong>${lb}</strong></div>
-    <div class="tnstat"><div class="dot" style="background:#88CCA8"></div><span>غير لبنانيين:</span><strong>${other}</strong></div>
-    <div class="tnstat"><div class="dot" style="background:#C9A84C"></div><span>معاملات اليوم:</span><strong>${todayTxn}</strong></div>
-    <div class="tnstat"><div class="dot" style="background:#7DCCA0"></div><span>النماذج:</span><strong>${forms.length}</strong></div>
+  const el=document.getElementById('tnStats'); if(!el)return;
+  el.innerHTML=`
+    <div class="tnstat"><div class="dot" style="background:var(--gold)"></div><span>إجمالي:</span><strong>${citizens.length}</strong></div>
+    <div class="tnstat"><div class="dot" style="background:#88BBE8"></div><span>لبناني:</span><strong>${lb}</strong></div>
+    <div class="tnstat"><div class="dot" style="background:#88CCA8"></div><span>سوري:</span><strong>${sy}</strong></div>
+    <div class="tnstat"><div class="dot" style="background:#C9A84C"></div><span>فلسطيني:</span><strong>${pa}</strong></div>
+    <div class="tnstat"><div class="dot" style="background:#7DCCA0"></div><span>معاملات اليوم:</span><strong>${todayTxn}</strong></div>
   `;
 }
 function selectCitizen(id){
+  const c=citizens.find(x=>x.id===id); if(!c)return;
+  if(regOf(c)!==activeReg){ activeReg=regOf(c); document.querySelectorAll('.reg-btn').forEach(b=>b.classList.toggle('active', b.dataset.reg===activeReg)); }
   currentCitId=id;currentTab='personal';
-  renderSideList(document.querySelector('.sidebar-search input').value);
+  const si=document.querySelector('.sidebar-search input');
+  renderSideList(si?si.value:'');
   showPage('citizen_detail');
   document.querySelectorAll('.nav-item').forEach((n,i)=>{if(i===1)n.classList.add('active');else n.classList.remove('active');});
 }
@@ -3778,11 +3901,8 @@ function nextSerial(){
 function renderDashboard(){
   const mp=document.getElementById('mainPanel');
   const total=citizens.length;
-  const lb=citizens.filter(c=>(c.nationality||'').includes('لبناني')).length;
-  const sy=citizens.filter(c=>(c.nationality||'').includes('سوري')).length;
-  const pa=citizens.filter(c=>(c.nationality||'').includes('فلسطيني')).length;
-  const st=citizens.filter(c=>(c.nationality||'').includes('محدد')).length;
-  const other=total-lb-sy-pa-st;
+  const lb=regCount('lb'), sy=regCount('sy'), pa=regCount('pa');
+  const st=0, other=0;
   const todayT=transactions.filter(t=>t.date===todayStr());
   const todayIncome=todayT.reduce((s,t)=>s+(parseFloat(t.paid)||0),0);
   const unpaidCount=transactions.filter(t=>t.payStatus==='غير مدفوع').length;
@@ -3813,7 +3933,7 @@ function renderDashboard(){
     agentPendingItems.push({ag,item:i});
   }));
 
-  const natData=[{label:'لبناني',val:lb,color:'#4C8BC9'},{label:'سوري',val:sy,color:'#4CAF7A'},{label:'فلسطيني',val:pa,color:'#C9A84C'},{label:'عديم جنسية',val:st,color:'#888'},{label:'أخرى',val:other,color:'#BB88EE'}].filter(d=>d.val>0);
+  const natData=[{label:'لبناني',val:lb,color:'#4C8BC9'},{label:'سوري',val:sy,color:'#4CAF7A'},{label:'فلسطيني',val:pa,color:'#C9A84C'}].filter(d=>d.val>0);
   const pieRadius=55,cx=65,cy=65;
   function buildPie(data,tot){
     if(tot===0)return`<circle cx="${cx}" cy="${cy}" r="${pieRadius}" fill="#1C2A45"/>`;
@@ -3843,7 +3963,7 @@ function renderDashboard(){
         <div style="font-size:12px;font-weight:700;color:#E88080;margin-bottom:10px">🪪 وثائق تنتهي خلال 30 يوماً (${expiringDocs.length})</div>
         <div style="display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto">
           ${expiringDocs.slice(0,8).map(({cit,label,date})=>{
-            const name=`${cit.firstName||''} ${cit.fatherName||''} ${cit.lastName||''}`.trim();
+            const name=`${citName(cit)}`.trim();
             const phone=cit.phone;
             let waUrl='';
             if(phone){let p=phone.replace(/\D/g,'');if(p.startsWith('0'))p='961'+p.slice(1);waUrl=`https://wa.me/${p}?text=${encodeURIComponent(`السيد/ة ${name}، يُذكّركم مكتب المختار بأن ${label} ستنتهي بتاريخ ${date}. يُرجى المبادرة للتجديد.`)}` ;}
@@ -3866,10 +3986,10 @@ function renderDashboard(){
             const cit=txn?citizens.find(c=>c.id===txn.citId):null;
             const phone=cit?.phone||txn?.phone;
             let waUrl='';
-            if(phone&&cit){let p=phone.replace(/\D/g,'');if(p.startsWith('0'))p='961'+p.slice(1);const nm=`${cit.firstName||''} ${cit.fatherName||''}`.trim();waUrl=`https://wa.me/${p}?text=${encodeURIComponent(`السيد/ة ${nm}، يُعلمكم مكتب المختار أن معاملتكم (${item.desc||''}) لا تزال قيد الإنجاز عند المندوب ${ag.name}. سنُعلمكم فور الاستلام.`)}`;}
+            if(phone&&cit){let p=phone.replace(/\D/g,'');if(p.startsWith('0'))p='961'+p.slice(1);const nm=`${citName(cit)}`.trim();waUrl=`https://wa.me/${p}?text=${encodeURIComponent(`السيد/ة ${nm}، يُعلمكم مكتب المختار أن معاملتكم (${item.desc||''}) لا تزال قيد الإنجاز عند المندوب ${ag.name}. سنُعلمكم فور الاستلام.`)}`;}
             return`<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:rgba(76,139,201,0.06);border-radius:8px">
               <span style="font-size:13px">🧑‍💼</span>
-              <div style="flex:1"><div style="font-size:12px;color:var(--text)">${item.desc||'—'}</div><div style="font-size:10px;color:var(--text3)">${ag.name} · أُرسل: ${item.date||'—'} ${cit?'· '+cit.firstName+' '+cit.lastName:''}</div></div>
+              <div style="flex:1"><div style="font-size:12px;color:var(--text)">${item.desc||'—'}</div><div style="font-size:10px;color:var(--text3)">${ag.name} · أُرسل: ${item.date||'—'} ${cit?'· '+citName(cit):''}</div></div>
               ${waUrl?`<a href="${waUrl}" target="_blank" class="btn btn-outline" style="font-size:10px;padding:3px 8px;color:#25D366;border-color:rgba(37,211,102,0.4)">📲 تذكير</a>`:''}
               <button onclick="currentAgentId='${ag.id}';showPage('agent_detail')" class="btn btn-outline" style="font-size:10px;padding:3px 8px">فتح</button>
             </div>`;
@@ -3915,40 +4035,45 @@ function renderDashboard(){
 // ===== CITIZENS PAGE =====
 function renderCitizensPage(){
   const mp=document.getElementById('mainPanel');
+  const cnt=regCount(activeReg);
   mp.innerHTML=`
     <div class="page-header">
-      <div><div class="page-title">سجل المواطنين</div><div class="page-sub">${citizens.length} مواطن مسجل</div></div>
-      <div class="page-actions"><button class="btn btn-gold" onclick="openAddModal()">+ مواطن جديد</button></div>
+      <div><div class="page-title">سجل ${regIcon(activeReg)} ${regLabel(activeReg)}</div><div class="page-sub">${cnt} سجل · بدّل الملف من القائمة الجانبية</div></div>
+      <div class="page-actions">
+        <button class="btn btn-outline" onclick="exportAllData()" title="تنزيل نسخة احتياطية كاملة">⬇️ نسخة احتياطية</button>
+        <label class="btn btn-outline" style="cursor:pointer" title="استرجاع نسخة احتياطية">⬆️ استيراد<input type="file" accept="application/json" onchange="importAllData(this)" style="display:none"></label>
+        <button class="btn btn-gold" onclick="openAddModal()">+ سجل جديد</button>
+      </div>
     </div>
     <div style="padding:12px 24px;flex-shrink:0">
-      <input type="text" oninput="filterCitTable(this.value)" placeholder="🔍  بحث بالاسم أو رقم السجل أو الجنسية..." style="width:100%;padding:10px 14px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px">
+      <input type="text" oninput="filterCitTable(this.value)" placeholder="🔍  بحث بالرقم التسلسلي أو العنوان..." style="width:100%;padding:10px 14px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px">
     </div>
     <div class="panel-content" style="padding-top:0">
-      <div class="recent-card">
-        <table class="rtable"><thead><tr><th>#</th><th>الاسم الكامل</th><th>الجنسية</th><th>رقم السجل</th><th>الحالة</th><th>الهاتف</th><th>القضاء</th><th>الإجراءات</th></tr></thead>
+      <div class="recent-card" style="overflow-x:auto">
+        <table class="rtable"><thead id="citThead"></thead>
         <tbody id="citTbody"></tbody></table>
       </div>
     </div>`;
-  renderCitTable(citizens);
+  renderCitTable(citizens.filter(c=>regOf(c)===activeReg));
 }
+function _citTableCols(){ return getEffectiveLayout().filter(f=>!f.hidden && f.type!=='textarea').slice(0,5); }
 function renderCitTable(list){
-  document.getElementById('citTbody').innerHTML=list.length===0?
-    `<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text3)">لا يوجد مواطنون. <a href="#" onclick="openAddModal()" style="color:var(--gold)">أضف الأول</a></td></tr>`:
-    list.map((c,i)=>`<tr>
-      <td style="color:var(--text3)">${i+1}</td>
-      <td style="color:var(--text);font-weight:600;cursor:pointer" onclick="selectCitizen('${c.id}')">${c.firstName||''} ${c.fatherName||''} ${c.lastName||''}</td>
-      <td><span class="cit-nat ${natClass(c.nationality)}">${c.nationality||'—'}</span></td>
-      <td>${c.registryNum||'—'}</td>
-      <td>${c.marital||'—'}</td>
-      <td style="direction:ltr;text-align:right">${c.phone||'—'}</td>
-      <td>${c.district||'—'}</td>
+  const cols=_citTableCols();
+  const thead=document.getElementById('citThead');
+  if(thead)thead.innerHTML=`<tr><th style="width:64px">#</th>${cols.map(c=>`<th>${esc(c.label)}</th>`).join('')}<th style="width:96px">الإجراءات</th></tr>`;
+  const tb=document.getElementById('citTbody'); if(!tb)return;
+  tb.innerHTML=list.length===0?
+    `<tr><td colspan="${cols.length+2}" style="text-align:center;padding:30px;color:var(--text3)">لا سجلات في هذا الملف. <a href="#" onclick="openAddModal();return false" style="color:var(--gold)">أضف الأول</a></td></tr>`:
+    list.slice().sort((a,b)=>(parseInt(a.serial)||0)-(parseInt(b.serial)||0)).map(c=>`<tr>
+      <td style="color:var(--gold);font-weight:700;cursor:pointer" onclick="selectCitizen('${c.id}')">#${c.serial!=null?c.serial:'—'}</td>
+      ${cols.map(f=>`<td style="cursor:pointer" onclick="selectCitizen('${c.id}')">${esc(fieldGetVal(f,c)||'—')}</td>`).join('')}
       <td><div style="display:flex;gap:5px">
         <button class="btn btn-outline" onclick="selectCitizen('${c.id}')" style="font-size:11px;padding:4px 10px">✏️</button>
         <button class="btn btn-red" onclick="deleteCit('${c.id}')" style="font-size:11px;padding:4px 10px">🗑️</button>
       </div></td>
     </tr>`).join('');
 }
-function filterCitTable(v){const f=v.toLowerCase();renderCitTable(citizens.filter(c=>(c.firstName+' '+c.fatherName+' '+c.lastName).toLowerCase().includes(f)||(c.registryNum||'').includes(f)||(c.nationality||'').includes(f)));}
+function filterCitTable(v){const f=(v||'').toLowerCase();renderCitTable(citizens.filter(c=>regOf(c)===activeReg&&(citName(c).toLowerCase().includes(f)||(''+(c.serial||'')).includes(f))));}
 
 // ===== CITIZEN DETAIL =====
 function renderCitizenDetail(skipRender=false){
@@ -3956,7 +4081,7 @@ function renderCitizenDetail(skipRender=false){
   if(!c){renderCitizensPage();return;}
   _renderedCitId=c.id; // ✅ هذا هو المواطن المعروض الآن
   const mp=document.getElementById('mainPanel');
-  const initials=((c.firstName||'?')[0]+(c.lastName||'?')[0]).toUpperCase();
+  const _nm=citName(c); const initials=((_nm&&_nm.charAt(0)!=='#')?_nm.trim().charAt(0):'#')||'#';
   mp.innerHTML=`
     <div class="page-header" style="align-items:flex-start">
       <div style="display:flex;align-items:center;gap:14px">
@@ -3967,8 +4092,8 @@ function renderCitizenDetail(skipRender=false){
           <input type="file" id="citPhotoInput" accept="image/*" style="display:none" onchange="uploadCitizenPhoto(event)">
           ${c.photo?`<span onclick="deleteCitizenPhoto()" style="position:absolute;top:-4px;left:-4px;background:var(--red);color:#fff;width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer" title="حذف الصورة">✕</span>`:''}
         </div>
-        <div><div class="page-title">${c.firstName||''} ${c.fatherName||''} ${c.lastName||''}</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:4px"><span class="cit-nat ${natClass(c.nationality)}">${c.nationality||'—'}</span><span class="page-sub">سجل: ${c.registryNum||'—'}</span></div></div>
+        <div><div class="page-title">${(_nm&&_nm.charAt(0)!=='#')?esc(_nm):('سجل #'+(c.serial!=null?c.serial:'—'))}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px"><span class="cit-nat ${regCls(regOf(c))}">${regIcon(regOf(c))} ${regLabel(regOf(c))}</span><span class="page-sub" style="color:var(--gold);font-weight:700">🔢 #${c.serial!=null?c.serial:'—'}</span></div></div>
       </div>
       <div class="page-actions">
         <button class="btn btn-blue" onclick="openTxnModalForCit()">📑 معاملة</button>
@@ -4021,11 +4146,11 @@ function renderCitForm(c){
   const host=document.getElementById('citForm'); if(!host)return;
   const SECTIONS=[['personal','👤 معلومات شخصية'],['registry','📜 بيانات النفوس'],['address','📍 العنوان'],['docs','🪪 الوثائق الرسمية والإقامة'],['extra','➕ حقول إضافية']];
   const eff=getEffectiveLayout();
-  let html='';
+  let html='<div class="form-section"><div class="form-grid"><div class="form-field"><label>🔢 الرقم التسلسلي (تلقائي · لا يُعدّل)</label><input type="text" value="#'+(c.serial!=null?c.serial:'—')+'" readonly style="background:var(--navy3);color:var(--gold);font-weight:700;cursor:default"></div></div></div>';
   SECTIONS.forEach(function(s){
     const tab=s[0], title=s[1];
     const fields=eff.filter(f=>f.tab===tab && (_arrangeMode || !f.hidden));
-    if(!fields.length && !_arrangeMode && tab==='extra') return; // أخفِ قسم الإضافية الفارغ بوضع الإدخال
+    if(!fields.length && !_arrangeMode) return; // أخفِ الأقسام الفارغة في وضع الإدخال
     const grid=fields.length
       ? `<div class="form-grid">${fields.map(f=>renderField(f,c)).join('')}</div>`
       : `<p style="color:var(--text3);font-size:12px">لا حقول في هذا القسم.</p>`;
@@ -4108,8 +4233,7 @@ function toggleFieldColumn(key){
   const eff=getEffectiveLayout();
   const f=eff.find(x=>x.key===key); if(!f)return;
   const nf=!f.full;
-  fieldLayout=eff.map(x=>x.key===key?{...x,full:nf}:x).map(_leanField);
-  saveFieldLayout();
+  _commitActiveLayout(eff.map(x=>x.key===key?{...x,full:nf}:x));
   _refreshFieldsUI();
 }
 function moveFieldFromDetail(key,newTab){
@@ -4153,7 +4277,7 @@ function renderTabContent(tab,c){
     activateFieldDragDrop();
   }
   else if(tab==='myforms'){
-    tc.innerHTML=`<div class="form-section"><div class="form-section-title">📋 نماذجي</div>${forms.length===0?`<div class="empty-state" style="height:200px"><div class="e-icon">📋</div><p>لا نماذج. <a href="#" onclick="showPage('formbuilder')" style="color:var(--gold)">أنشئ نموذجاً</a></p></div>`:`<div class="form-card-grid">${forms.map(fm=>`<div class="form-card"><div class="form-card-title">📄 ${fm.name}</div><div class="form-card-meta">${fm.boxes.length} حقل · ${fm.hasImage?'مع صورة':'بدون صورة'}</div><div class="form-card-actions"><button class="btn btn-gold" onclick="previewForm('${fm.id}')" style="font-size:11px;padding:5px 10px">👁️ معاينة</button></div></div>`).join('')}</div>`}</div>`;
+    tc.innerHTML=`<div class="form-section"><div class="form-section-title">📋 نماذجي</div>${forms.length===0?`<div class="empty-state" style="height:200px"><div class="e-icon">📋</div><p>لا نماذج. <a href="#" onclick="showPage('formbuilder')" style="color:var(--gold)">أنشئ نموذجاً</a></p></div>`:`<div class="form-card-grid">${forms.map(fm=>`<div class="form-card"><div class="form-card-title">📄 ${fm.name}</div><div class="form-card-meta">${fm.boxes.length} حقل · ${fm.hasImage?'مع صورة':'بدون صورة'}</div><div class="form-card-actions"><button class="btn btn-gold" onclick="previewFormPrompt('${fm.id}')" style="font-size:11px;padding:5px 10px">👁️ معاينة</button></div></div>`).join('')}</div>`}</div>`;
   }
   else if(tab==='cit_txns'){
     const citTxns=transactions.filter(t=>t.citId===c.id);
@@ -4201,8 +4325,7 @@ function reorderSectionByKeys(keys){
   const seq=keys.map(k=>byKey[k]).filter(f=>f&&f.tab===tab);
   eff.forEach(f=>{ if(f.tab===tab && !seq.includes(f)) seq.push(f); }); // المخفية بنهاية القسم
   let i=0;
-  fieldLayout=eff.map(f=> f.tab===tab ? seq[i++] : f).map(_leanField);
-  saveFieldLayout();
+  _commitActiveLayout(eff.map(f=> f.tab===tab ? seq[i++] : f));
 }
 function saveFieldOrderFromDOM(){
   // يعيد ترتيب كل قسم وفق ترتيب عناصره الظاهرة في صندوقه — دون لمس بقية الأقسام
@@ -4242,55 +4365,131 @@ function deleteCit(id){
   if(currentCitId===id){currentCitId=null;renderDashboard();}
   notify('🗑️ تم الحذف');
 }
+// ═══════════════════════════════════════════════════════════════
+//  منشئ بيان الطلب قبل الطباعة (اختيار متعدد + عدد لكل بند + إضافات)
+//  يعتمد على serviceTypes كقائمة معاملات موحّدة (نفسها المستخدمة في المعاملات).
+// ═══════════════════════════════════════════════════════════════
+let _printReq=[];
+let _reqTarget=null;
+function _renderPrintReqChips(){
+  const host=document.getElementById('printReqChips'); if(!host)return;
+  if(!serviceTypes.length){ host.innerHTML='<span style="font-size:11px;color:var(--text3)">لا توجد أنواع بعد — أضِف نوعاً من الحقل أدناه.</span>'; return; }
+  host.innerHTML=serviceTypes.map(function(svc,i){
+    const it=_printReq.find(function(x){return x.name===svc;});
+    const on=!!it;
+    return '<button onclick="printReqAddIdx('+i+')" style="padding:6px 11px;border-radius:16px;border:1px solid '+(on?'var(--gold3)':'var(--border2)')+';background:'+(on?'rgba(201,168,76,0.18)':'var(--navy3)')+';color:'+(on?'var(--gold)':'var(--text2)')+';font-family:Cairo,sans-serif;font-size:12px;font-weight:600;cursor:pointer">'+esc(svc)+(on?(' <span style="background:var(--gold3);color:#0B1426;border-radius:8px;padding:0 6px;font-size:10px;font-weight:700">'+it.qty+'</span>'):'')+'</button>';
+  }).join('');
+}
+function _renderPrintReqList(){
+  const host=document.getElementById('printReqList'); if(!host)return;
+  if(!_printReq.length){ host.innerHTML='<div style="font-size:11.5px;color:var(--text3);padding:6px 0">لم تختر أي معاملة بعد — اضغط على المعاملات في الأعلى.</div>'; return; }
+  host.innerHTML=_printReq.map(function(it,i){
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--navy3);border:1px solid var(--border);border-radius:8px;margin-bottom:6px">'
+      +'<span style="color:var(--gold);font-weight:700;min-width:18px">'+(i+1)+'.</span>'
+      +'<span style="flex:1;font-size:12.5px;color:var(--text)">'+esc(it.name)+'</span>'
+      +'<button onclick="printReqQty('+i+',-1)" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border2);background:var(--navy2);color:var(--text);cursor:pointer;font-size:15px;line-height:1">−</button>'
+      +'<span style="min-width:22px;text-align:center;font-size:12.5px;color:var(--text);font-weight:700">'+it.qty+'</span>'
+      +'<button onclick="printReqQty('+i+',1)" style="width:26px;height:26px;border-radius:6px;border:1px solid var(--border2);background:var(--navy2);color:var(--text);cursor:pointer;font-size:15px;line-height:1">+</button>'
+      +'<button onclick="printReqRemove('+i+')" title="حذف" style="width:26px;height:26px;border-radius:6px;border:none;background:rgba(201,76,76,0.18);color:#E88080;cursor:pointer;font-size:14px;line-height:1">×</button>'
+    +'</div>';
+  }).join('');
+}
+function printReqAddIdx(i){ const n=serviceTypes[i]; if(n==null)return; printReqAdd(n); }
+function printReqAdd(name){
+  const it=_printReq.find(function(x){return x.name===name;});
+  if(it) it.qty++; else _printReq.push({name:name,qty:1});
+  _renderPrintReqChips(); _renderPrintReqList();
+}
+function printReqQty(i,d){
+  if(!_printReq[i])return;
+  _printReq[i].qty+=d;
+  if(_printReq[i].qty<=0)_printReq.splice(i,1);
+  _renderPrintReqChips(); _renderPrintReqList();
+}
+function printReqRemove(i){ if(_printReq[i]){_printReq.splice(i,1);_renderPrintReqChips();_renderPrintReqList();} }
+function printReqAddType(){
+  const el=document.getElementById('printReqNewType'); if(!el)return;
+  const n=(el.value||'').trim(); if(!n){return;}
+  if(!serviceTypes.includes(n)){ serviceTypes.push(n); saveServiceTypes(); }
+  el.value='';
+  printReqAdd(n);
+}
+function _requestPlainText(req){
+  if(typeof req==='string') req={items:[],note:req};
+  if(!req) return '';
+  const items=Array.isArray(req.items)?req.items:[];
+  const note=(req.note||'').trim();
+  const lines=items.map(function(it,i){return (i+1)+'. '+it.name+((it.qty>1)?(' (عدد '+it.qty+')'):'');});
+  let out=lines.join('\n');
+  if(note) out+=(out?'\n':'')+'إضافات: '+note;
+  return out;
+}
+function _buildRequestBox(req){
+  if(typeof req==='string') req={items:[],note:req};
+  req=req||{};
+  const items=Array.isArray(req.items)?req.items:[];
+  const note=(req.note||'').trim();
+  if(!items.length && !note) return '';
+  let inner='';
+  if(items.length){
+    inner+='<ol style="margin:6px 22px 0;padding:0;font-size:14px;font-weight:bold;color:#111;line-height:2">'
+      +items.map(function(it){return '<li>'+esc(it.name)+((it.qty>1)?(' <span style="font-weight:normal;color:#555">(عدد '+it.qty+')</span>'):'')+'</li>';}).join('')
+      +'</ol>';
+  }
+  if(note){
+    inner+='<div style="margin-top:'+(items.length?'10px':'2px')+';font-size:13px;color:#111;white-space:pre-wrap"><span style="color:#888;font-size:11px">إضافات: </span>'+esc(note)+'</div>';
+  }
+  const ttl=items.length?'المعاملات المطلوبة':'بيان الطلب';
+  return '<div style="margin-top:20px;padding:12px 16px;border:2px solid #C9A84C;border-radius:6px;background:#fffef5"><div style="font-size:11px;color:#888;margin-bottom:5px;font-weight:bold">'+ttl+':</div>'+inner+'</div>';
+}
 function printCitizen(){
   const c=citizens.find(x=>x.id===currentCitId);if(!c)return;
   saveCitizen();
-  // Show pre-print note modal
+  _reqTarget={type:'citizen'};
   const el=document.getElementById('printNoteModal');
-  if(el){document.getElementById('printNoteText').value='';el.style.display='block';}
-  else{doPrintCitizen('');}
+  if(el){
+    _printReq=[];
+    const t=document.getElementById('printNoteText'); if(t)t.value='';
+    const nt=document.getElementById('printReqNewType'); if(nt)nt.value='';
+    _renderPrintReqChips(); _renderPrintReqList();
+    el.style.display='block';
+  } else { doPrintCitizen({items:[],note:''}); }
 }
 function confirmPrintNote(){
-  const note=document.getElementById('printNoteText').value.trim();
+  const t=document.getElementById('printNoteText');
+  const note=t?(t.value||'').trim():'';
+  const items=_printReq.map(function(x){return {name:x.name,qty:x.qty};});
+  const req={items:items,note:note};
+  const tgt=_reqTarget||{type:'citizen'};
+  _reqTarget=null;
   closeModal('printNoteModal');
-  doPrintCitizen(note);
+  if(tgt.type==='form') previewForm(tgt.fid,tgt.txnId,req);
+  else doPrintCitizen(req);
 }
-function doPrintCitizen(note){
+function doPrintCitizen(req){
   const c=citizens.find(x=>x.id===currentCitId);if(!c)return;
-  const ef=extraFields.map(e=>`<tr><td>${e.label}</td><td>${(c.extra||{})[e.id]||'—'}</td></tr>`).join('');
-  const noteHtml=note?`<div style="margin-top:20px;padding:12px 16px;border:2px solid #C9A84C;border-radius:6px;background:#fffef5"><div style="font-size:11px;color:#888;margin-bottom:4px">ملاحظة / بيان الطلب:</div><div style="font-size:14px;font-weight:bold;color:#111;white-space:pre-wrap">${note.replace(/</g,'&lt;')}</div></div>`:'';
+  const SECTIONS=[['personal','👤 معلومات شخصية'],['registry','📜 بيانات النفوس'],['address','📍 العنوان'],['docs','🪪 الوثائق'],['extra','➕ حقول إضافية']];
+  const eff=getEffectiveLayout().filter(f=>!f.hidden);
+  let bodyHtml='';
+  SECTIONS.forEach(([tab,title])=>{
+    const fs=eff.filter(f=>f.tab===tab);
+    if(!fs.length)return;
+    const rows=fs.map(f=>{
+      let v=fieldGetVal(f,c);
+      if(f.type==='today')v=todayStr();
+      if(f.type==='static')v=f.staticValue||'';
+      return '<tr><td>'+esc(f.label)+'</td><td>'+esc(v||'—')+'</td></tr>';
+    }).join('');
+    bodyHtml+='<h2>'+title+'</h2><table>'+rows+'</table>';
+  });
+  const noteHtml=_buildRequestBox(req);
+  const _nm=citName(c); const titleName=(_nm&&_nm.charAt(0)!=='#')?_nm:('سجل #'+(c.serial!=null?c.serial:'—'));
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>بيانات المواطن</title><style>body{font-family:Arial;padding:30px;direction:rtl;color:#111}h1{font-size:18px;border-bottom:3px solid #C9A84C;padding-bottom:8px;margin-bottom:16px}h2{font-size:13px;color:#0B1426;margin:16px 0 6px;background:#f5f5f5;padding:5px 10px;border-right:3px solid #C9A84C}table{width:100%;border-collapse:collapse}td{padding:6px 10px;border:1px solid #ddd;font-size:13px}td:first-child{font-weight:bold;background:#fafafa;width:180px}.noprint{margin-bottom:14px}@media print{.noprint{display:none}}</style></head><body>
+  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>بيانات السجل</title><style>body{font-family:Arial;padding:30px;direction:rtl;color:#111}h1{font-size:18px;border-bottom:3px solid #C9A84C;padding-bottom:8px;margin-bottom:16px}h2{font-size:13px;color:#0B1426;margin:16px 0 6px;background:#f5f5f5;padding:5px 10px;border-right:3px solid #C9A84C}table{width:100%;border-collapse:collapse;margin-bottom:6px}td{padding:6px 10px;border:1px solid #ddd;font-size:13px}td:first-child{font-weight:bold;background:#fafafa;width:180px}.noprint{margin-bottom:14px}@media print{.noprint{display:none}}</style></head><body>
   <div class="noprint"><button onclick="window.print()" style="padding:8px 18px;background:#C9A84C;color:#111;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ طباعة</button></div>
   ${noteHtml}
-  <h1>${c.firstName||''} ${c.fatherName||''} ${c.lastName||''}</h1>
-  <h2>المعلومات الشخصية</h2><table>
-  <tr><td>الاسم الكامل</td><td>${c.firstName||''} ${c.fatherName||''} ${c.lastName||''}</td></tr>
-  <tr><td>اسم الأم</td><td>${c.motherName||''} ${c.motherLast||''}</td></tr>
-  <tr><td>تاريخ الميلاد</td><td>${c.dob||'—'}</td></tr>
-  <tr><td>محل الولادة</td><td>${c.birthPlace||'—'}</td></tr>
-  <tr><td>الجنسية</td><td>${c.nationality||'—'} ${c.nationalityOther?'('+c.nationalityOther+')':''}</td></tr>
-  <tr><td>المذهب</td><td>${c.religion||'—'}</td></tr>
-  <tr><td>الحالة الاجتماعية</td><td>${c.marital||'—'}</td></tr>
-  <tr><td>اسم الزوج/ة</td><td>${c.spouseName||'—'}</td></tr>
-  <tr><td>عدد الأولاد</td><td>${c.children||'—'}</td></tr>
-  <tr><td>الهاتف</td><td>${c.phone||'—'}</td></tr>
-  </table>
-  <h2>العنوان</h2><table>
-  <tr><td>المحافظة</td><td>${c.governorate||'—'}</td></tr>
-  <tr><td>القضاء</td><td>${c.district||'—'}</td></tr>
-  <tr><td>البلدة</td><td>${c.town||'—'}</td></tr>
-  <tr><td>الشارع / البناية</td><td>${c.street||'—'} / ${c.building||'—'}</td></tr>
-  </table>
-  <h2>بيانات النفوس</h2><table>
-  <tr><td>رقم السجل</td><td>${c.registryNum||'—'}</td></tr>
-  <tr><td>رقم القيد</td><td>${c.registrationId||'—'}</td></tr>
-  <tr><td>رقم الهوية</td><td>${c.nationalId||'—'}</td></tr>
-  <tr><td>رقم الجواز</td><td>${c.passport||'—'}</td></tr>
-  <tr><td>رقم الإقامة</td><td>${c.residentId||'—'}</td></tr>
-  <tr><td>رقم اللاجئ</td><td>${c.refugeeNum||'—'}</td></tr>
-  </table>
-  ${ef?`<h2>معلومات إضافية</h2><table>${ef}</table>`:''}
+  <h1>${esc(titleName)} &nbsp;·&nbsp; ${regIcon(regOf(c))} ${regLabel(regOf(c))} &nbsp;·&nbsp; 🔢 #${c.serial!=null?c.serial:'—'}</h1>
+  ${bodyHtml||'<p style="color:#888">لا حقول معرّفة في هذا الملف بعد.</p>'}
   <p style="margin-top:20px;font-size:11px;color:#999">تاريخ الطباعة: ${new Date().toLocaleDateString('ar-LB')}</p>
   </body></html>`);
   w.document.close();setTimeout(()=>w.print(),400);
@@ -4397,15 +4596,15 @@ function openTxnModalForCit(){
   openTxnModal();
   const c=citizens.find(x=>x.id===currentCitId);
   if(c){
-    document.getElementById('txnCitName').value=`${c.firstName||''} ${c.fatherName||''} ${c.lastName||''}`;
+    document.getElementById('txnCitName').value=`${citName(c)}`;
     document.getElementById('txnModal')._citId=c.id;
   }
 }
 function searchTxnCit(v){
   const sug=document.getElementById('txnCitSug');
   if(!v||v.length<2){sug.innerHTML='';return;}
-  const hits=citizens.filter(c=>(c.firstName+' '+c.fatherName+' '+c.lastName).includes(v)).slice(0,5);
-  sug.innerHTML=hits.length===0?'':`<div style="position:absolute;top:0;right:0;left:0;background:var(--navy2);border:1px solid var(--border2);border-radius:8px;z-index:50;overflow:hidden">${hits.map(c=>`<div onclick="selectTxnCit('${c.id}','${esc(c.firstName+' '+c.fatherName+' '+c.lastName)}')" style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid var(--border);" onmouseenter="this.style.background='var(--navy3)'" onmouseleave="this.style.background=''">${c.firstName||''} ${c.fatherName||''} ${c.lastName||''}</div>`).join('')}</div>`;
+  const hits=citizens.filter(c=>(citName(c)).includes(v)).slice(0,5);
+  sug.innerHTML=hits.length===0?'':`<div style="position:absolute;top:0;right:0;left:0;background:var(--navy2);border:1px solid var(--border2);border-radius:8px;z-index:50;overflow:hidden">${hits.map(c=>`<div onclick="selectTxnCit('${c.id}','${esc(citName(c))}')" style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid var(--border);" onmouseenter="this.style.background='var(--navy3)'" onmouseleave="this.style.background=''">${citName(c)}</div>`).join('')}</div>`;
 }
 function selectTxnCit(id,name){
   document.getElementById('txnCitName').value=name;
@@ -4496,6 +4695,8 @@ function openQuickFieldAdder(){
   document.getElementById('qfType').value='text';
   document.getElementById('qfOpts').value='';
   document.getElementById('qfOptsWrap').style.display='none';
+  var _qs=document.getElementById('qfSection'); if(_qs)_qs.value='extra';
+  var _qt=document.getElementById('qfIsTitle'); if(_qt)_qt.checked=false;
   document.getElementById('quickFieldModal').style.display='block';
   setTimeout(()=>document.getElementById('qfName').focus(),100);
 }
@@ -4504,19 +4705,17 @@ function saveQuickField(){
   if(!name){notify('❌ أدخل اسم الحقل','red');return;}
   const type=document.getElementById('qfType').value;
   const opts=(type==='select'||type==='combo')?(document.getElementById('qfOpts').value||'').split(',').map(s=>s.trim()).filter(Boolean):[];
+  const secEl=document.getElementById('qfSection'); const tab=secEl?secEl.value:'extra';
+  const isTitle=!!(document.getElementById('qfIsTitle')&&document.getElementById('qfIsTitle').checked);
   const fieldId='ef_'+Date.now();
-  
-  // أضف التعريف إلى extraFields (مصدر التعريف الوحيد للحقول المخصّصة)
-  extraFields.push({id:fieldId,label:name,type,options:opts,staticValue:''});
+  if(isTitle){ extraFields.forEach(x=>{ if((x.reg||'lb')===activeReg) x.isTitle=false; }); }
+  extraFields.push({id:fieldId,label:name,type,options:opts,staticValue:'',reg:activeReg,isTitle});
   saveEF();
-  
-  // أضف إدخالاً نحيفاً إلى التخطيط (الترتيب/القسم/الإظهار/العرض فقط)
-  fieldLayout.push({key:'extra_'+fieldId,tab:'extra',hidden:false,full:(type==='textarea')});
+  fieldLayout.push({key:'extra_'+fieldId,tab,hidden:false,full:(type==='textarea')});
   saveFieldLayout();
-  
   closeModal('quickFieldModal');
   notify('✅ تمت إضافة الحقل: '+name);
-  // أعد عرض الحقول
+  const si=document.querySelector('.sidebar-search input'); renderSideList(si?si.value:'');
   _refreshFieldsUI();
 }
 function renderExtraFieldsPage(){
@@ -4545,12 +4744,12 @@ function renderExtraFieldsPage(){
       const e = extraFields.find(x=>x.id===f.efId) || {id:f.efId, label:f.label, type:f.type, options:f.options, staticValue:f.staticValue||''};
       const typeLabel=e.type==='today'?'📅 تاريخ اليوم تلقائي':e.type==='static'?'📌 نص ثابت: '+(e.staticValue||''):e.type;
       const opts=e.options&&e.options.length?' · '+e.options.join(' / '):'';
-      efHtml+='<div class="ef-card"><div class="ef-name">'+e.label+'</div><div class="ef-type">'+typeLabel+opts+'</div><button class="btn btn-red" onclick="delEF(\''+e.id+'\')" style="font-size:11px;padding:4px 10px">🗑️</button></div>';
+      efHtml+='<div class="ef-card"><div style="flex:1;min-width:0"><div class="ef-name">'+e.label+(e.isTitle?` <span style="font-size:10px;color:var(--gold);font-weight:700">★ عنوان العرض</span>`:'')+'</div><div class="ef-type">'+typeLabel+opts+'</div></div><button class="btn btn-outline" onclick="setTitleField(\''+e.id+'\')" style="font-size:14px;padding:4px 10px" title="تعيين كعنوان العرض">'+(e.isTitle?'★':'☆')+'</button><button class="btn btn-red" onclick="delEF(\''+e.id+'\')" style="font-size:11px;padding:4px 10px">🗑️</button></div>';
     });
   }
   
   mp.innerHTML=
-    '<div class="page-header"><div><div class="page-title">الحقول المخصصة</div><div class="page-sub">أضف حقولاً إضافية تظهر لكل مواطن</div></div></div>'+
+    '<div class="page-header"><div><div class="page-title">الحقول المخصصة — '+regIcon(activeReg)+' '+regLabel(activeReg)+'</div><div class="page-sub">حقول هذا الملف فقط · بدّل الملف من القائمة الجانبية</div></div></div>'+
     '<div class="panel-content">'+
       '<div style="background:var(--navy2);border:1px solid var(--border2);border-radius:12px;padding:16px;margin-bottom:16px">'+
         '<div class="form-section-title">🔢 الرقم التسلسلي للمعاملات</div>'+
@@ -4577,7 +4776,7 @@ function renderExtraFieldsPage(){
       '<div style="background:var(--navy2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px">'+
         '<div class="form-section-title">➕ إضافة حقل جديد</div>'+
         '<div class="form-grid g3">'+
-          '<div class="form-field"><label>اسم الحقل</label><input type="text" id="ef_name" placeholder="مثال: رقم الملف، الحالة الصحية..."></div>'+
+          '<div class="form-field"><label>اسم الحقل</label><input type="text" id="ef_name" placeholder="مثال: رقم الملف، الحالة الصحية..."></div>'+'<div class="form-field"><label>القسم الذي يظهر فيه</label><select id="ef_section"><option value="personal">👤 شخصية</option><option value="registry">📜 نفوس</option><option value="address">📍 عنوان</option><option value="docs">🪪 وثائق</option><option value="extra" selected>➕ إضافية</option></select></div>'+
           '<div class="form-field"><label>نوع الحقل</label><select id="ef_type" onchange="toggleEFOpts()">'+
             '<option value="text">نص قصير</option>'+
             '<option value="number">رقم</option>'+
@@ -4592,9 +4791,9 @@ function renderExtraFieldsPage(){
           '<div class="form-field" id="ef_static_wrap" style="display:none"><label>النص الثابت</label><input type="text" id="ef_static_val" placeholder="مثال: البقاع، الجمهورية اللبنانية..."></div>'+
           '<div class="form-field" id="ef_static_wrap" style="display:none"><label>النص الثابت</label><input type="text" id="ef_static_val" placeholder="مثال: البقاع، الجمهورية اللبنانية..."></div>'+
         '</div>'+
-        '<div style="margin-top:12px"><button class="btn btn-gold" onclick="addEF()">+ إضافة الحقل</button></div>'+
+        '<div style="margin-top:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap"><label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer"><input type="checkbox" id="ef_isTitle" style="width:auto"> ★ تعيين كعنوان العرض لهذا الملف</label><button class="btn btn-gold" onclick="addEF()">+ إضافة الحقل</button></div>'+
       '</div>'+
-      '<div class="form-section-title">📝 الحقول المعرّفة ('+extraFields.length+')</div>'+
+      '<div class="form-section-title">📝 حقول هذا الملف ('+extraFields.filter(e=>(e.reg||'lb')===activeReg).length+')</div>'+
       '<div id="efCardsContainer" style="display:flex;flex-direction:column;gap:12px;margin-top:12px">'+efHtml+'</div>'+
     '</div>';
   
@@ -4614,18 +4813,17 @@ function addEF(){
   const opts=(type==='select'||type==='combo')?(document.getElementById('ef_opts').value||'').split(',').map(s=>s.trim()).filter(Boolean):[];
   const staticValue=type==='static'?(document.getElementById('ef_static_val')?document.getElementById('ef_static_val').value.trim():''):'';
   if(type==='static'&&!staticValue){notify('❌ أدخل النص الثابت','red');return;}
+  const secEl=document.getElementById('ef_section'); const tab=secEl?secEl.value:'extra';
+  const isTitle=!!(document.getElementById('ef_isTitle')&&document.getElementById('ef_isTitle').checked);
   const fieldId='ef_'+Date.now();
-  
-  // أضف التعريف إلى extraFields (مصدر التعريف الوحيد)
-  extraFields.push({id:fieldId,label:name,type,options:opts,staticValue});
+  if(isTitle){ extraFields.forEach(x=>{ if((x.reg||'lb')===activeReg) x.isTitle=false; }); }
+  extraFields.push({id:fieldId,label:name,type,options:opts,staticValue,reg:activeReg,isTitle});
   saveEF();
-  
-  // أضف إدخالاً نحيفاً إلى التخطيط
-  fieldLayout.push({key:'extra_'+fieldId,tab:'extra',hidden:false,full:(type==='textarea')});
+  fieldLayout.push({key:'extra_'+fieldId,tab,hidden:false,full:(type==='textarea')});
   saveFieldLayout();
-  
   renderExtraFieldsPage();
-  notify('✅ تمت إضافة الحقل');
+  const si=document.querySelector('.sidebar-search input'); renderSideList(si?si.value:'');
+  notify('✅ تمت إضافة الحقل إلى ملف '+regLabel(activeReg));
 }
 function delEF(id){
   if(!confirm('حذف هذا الحقل؟'))return;
@@ -4641,12 +4839,13 @@ function delEF(id){
 // ===== FORMS PAGE =====
 function renderFormsPage(){
   const mp=document.getElementById('mainPanel');
+  const fl=forms.filter(fm=>(fm.reg||'lb')===activeReg);
   mp.innerHTML=`
-    <div class="page-header"><div><div class="page-title">النماذج المحفوظة</div><div class="page-sub">${forms.length} نموذج</div></div>
+    <div class="page-header"><div><div class="page-title">نماذج ${regIcon(activeReg)} ${regLabel(activeReg)}</div><div class="page-sub">${fl.length} نموذج · لهذا الملف</div></div>
     <div class="page-actions"><button class="btn btn-gold" onclick="showPage('formbuilder',document.querySelectorAll('.nav-item')[4])">+ نموذج جديد</button></div></div>
     <div class="panel-content">
-      ${forms.length===0?`<div class="empty-state"><div class="e-icon">📋</div><h3>لا توجد نماذج</h3><p>ابنِ نموذجك الأول</p><button class="btn btn-gold" onclick="showPage('formbuilder')" style="margin-top:12px">+ بناء نموذج</button></div>`:
-      `<div class="form-card-grid">${forms.map(fm=>`<div class="form-card">
+      ${fl.length===0?`<div class="empty-state"><div class="e-icon">📋</div><h3>لا توجد نماذج لهذا الملف</h3><p>ابنِ نموذجك الأول</p><button class="btn btn-gold" onclick="showPage('formbuilder')" style="margin-top:12px">+ بناء نموذج</button></div>`:
+      `<div class="form-card-grid">${fl.map(fm=>`<div class="form-card">
         <div class="form-card-title">📄 ${fm.name}</div>
         <div class="form-card-meta">${fm.boxes.length} حقل · ${fm.hasImage?'مع صورة':'بدون صورة'} · خط ${fm.fontSize||12}px</div>
         <div class="form-card-actions">
@@ -4661,12 +4860,13 @@ function renderFormsPage(){
 // ===== TEXT FORMS PAGE (نماذج نصية - قوالب نص رسمي بحقول مدمجة) =====
 function renderTextFormsPage(){
   const mp=document.getElementById('mainPanel');
+  const tfl=textForms.filter(tf=>(tf.reg||'lb')===activeReg);
   mp.innerHTML=`
-    <div class="page-header"><div><div class="page-title">📃 النماذج النصية</div><div class="page-sub">${textForms.length} نموذج · نص رسمي ثابت + حقول بيانات تُعبَّأ تلقائياً</div></div>
+    <div class="page-header"><div><div class="page-title">📃 النماذج النصية</div><div class="page-sub">${tfl.length} نموذج · نص رسمي ثابت + حقول بيانات تُعبَّأ تلقائياً</div></div>
     <div class="page-actions"><button class="btn btn-gold" onclick="openTextFormEditor(null)">+ نموذج نصي جديد</button></div></div>
     <div class="panel-content">
-      ${textForms.length===0?`<div class="empty-state"><div class="e-icon">📃</div><h3>لا توجد نماذج نصية</h3><p>أنشئ أول قالب نصي (إفادة، تصريح...)</p><button class="btn btn-gold" onclick="openTextFormEditor(null)" style="margin-top:12px">+ نموذج نصي جديد</button></div>`:
-      `<div class="form-card-grid">${textForms.map(tf=>`<div class="form-card">
+      ${tfl.length===0?`<div class="empty-state"><div class="e-icon">📃</div><h3>لا توجد نماذج نصية</h3><p>أنشئ أول قالب نصي (إفادة، تصريح...)</p><button class="btn btn-gold" onclick="openTextFormEditor(null)" style="margin-top:12px">+ نموذج نصي جديد</button></div>`:
+      `<div class="form-card-grid">${tfl.map(tf=>`<div class="form-card">
         <div class="form-card-title">📃 ${esc(tf.name)}</div>
         <div class="form-card-meta">${(tf.body.match(/\\{[^}]+\\}/g)||[]).length} حقل مدمج</div>
         <div class="form-card-actions">
@@ -4730,7 +4930,7 @@ function saveTextForm(){
     const tf=textForms.find(t=>t.id===_tfEditingId);
     if(tf){tf.name=name;tf.body=body;}
   }else{
-    textForms.unshift({id:'tf_'+Date.now(),name,body});
+    textForms.unshift({id:'tf_'+Date.now(),name,body,reg:activeReg});
   }
   saveTextForms();
   notify('✅ تم حفظ النموذج النصي');
@@ -4781,14 +4981,30 @@ function printTextForm(id,citId){
 }
 
 
-function previewFormPrompt(fid,txnId){if(!currentCitId){notify('⚠️ اختر مواطناً أولاً من القائمة','warn');return;}previewForm(fid,txnId);}
-function previewForm(fid,txnId){
+function previewFormPrompt(fid,txnId){
+  if(!currentCitId){notify('⚠️ اختر مواطناً أولاً من القائمة','warn');return;}
+  const fm=forms.find(function(f){return f.id===fid;});
+  const needsReq=fm&&Array.isArray(fm.boxes)&&fm.boxes.some(function(b){return b.key==='__request__';});
+  if(needsReq){ _openReqModalForForm(fid,txnId); }
+  else previewForm(fid,txnId);
+}
+function _openReqModalForForm(fid,txnId){
+  const el=document.getElementById('printNoteModal'); if(!el){previewForm(fid,txnId);return;}
+  _reqTarget={type:'form',fid:fid,txnId:txnId};
+  _printReq=[];
+  const t=document.getElementById('printNoteText'); if(t)t.value='';
+  const nt=document.getElementById('printReqNewType'); if(nt)nt.value='';
+  _renderPrintReqChips(); _renderPrintReqList();
+  el.style.display='block';
+}
+function previewForm(fid,txnId,req){
   const fm=forms.find(f=>f.id===fid);if(!fm)return;
   const c=citizens.find(x=>x.id===currentCitId);
   if(!c){notify('⚠️ اختر مواطناً من القائمة','warn');return;}
   const fs=fm.fontSize||12;
   // المعاملة المحددة أو آخر معاملة
   const _txn=txnId?transactions.find(function(t){return t.id===txnId;}):transactions.filter(function(t){return t.citId===c.id;}).sort(function(a,b){return b.serial-a.serial;})[0]||null;
+  const reqText=_requestPlainText(req);
   const getData = (key) => {
     // الرقم التسلسلي يُعالج في txnNote block أعلاه
     if (key.startsWith('extra_')){
@@ -4803,6 +5019,8 @@ function previewForm(fid,txnId){
     if(key==='txnNote') return _txn?(_txn.note||_txn.txnNote||''):'';
     // الرقم التسلسلي من المعاملة المحددة
     if(key==='serialNumber') return _txn?'#'+formatSerial(_txn.serial):'#'+formatSerial(nextSerial());
+    if(key==='serial') return (c.serial!=null?('#'+c.serial):'');
+    if(key==='__request__') return '';
     return c[key]||'';
 };
   const w=window.open('','_blank');
@@ -4814,12 +5032,19 @@ function previewForm(fid,txnId){
         const txt=tf?esc(resolveTextFormBody(tf,c)):'';
         return `<div class="pf-box" style="position:absolute;left:${b.xPct}%;top:${b.yPct}%;width:${b.wPct}%;min-height:${b.hPct}%;padding:1px 5px;font-size:${b.fs||fs}px;font-weight:${b.fw||'400'};color:${b.tc||'#111'};background:${b.bg&&b.bg!=='transparent'&&b.bg!=='#ffffff'?b.bg:'transparent'};font-family:Arial,sans-serif;white-space:pre-wrap;overflow:visible;direction:rtl;line-height:1.6">${txt}</div>`;
       }
+      if(b.key==='__request__'){
+        return `<div class="pf-box" style="position:absolute;left:${b.xPct}%;top:${b.yPct}%;width:${b.wPct}%;min-height:${b.hPct}%;padding:2px 6px;font-size:${b.fs||fs}px;font-weight:${b.fw||'700'};color:${b.tc||'#111'};background:${b.bg&&b.bg!=='transparent'&&b.bg!=='#ffffff'?b.bg:'transparent'};font-family:Arial,sans-serif;white-space:pre-wrap;overflow:visible;direction:rtl;line-height:1.7">${esc(reqText)}</div>`;
+      }
       return `<div class="pf-box" style="position:absolute;left:${b.xPct}%;top:${b.yPct}%;width:${b.wPct}%;min-height:${b.hPct}%;padding:1px 5px;font-size:${b.fs||fs}px;font-weight:${b.fw||'700'};color:${b.tc||'#111'};background:${b.bg&&b.bg!=='transparent'&&b.bg!=='#ffffff'?b.bg:'transparent'};font-family:Arial,sans-serif;white-space:nowrap;overflow:visible;direction:rtl;display:flex;align-items:center">${getData(b.key)}</div>`;
     }).join('');
     w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>${fm.name}</title><style>body{margin:20px;direction:rtl;font-family:Arial}@media print{.noprint{display:none}}</style></head><body><div class="noprint" style="margin-bottom:14px;display:flex;gap:8px"><button onclick="window.print()" style="padding:8px 18px;background:#C9A84C;color:#111;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ طباعة</button><button onclick="window.close()" style="padding:8px 14px;border:1px solid #ccc;border-radius:6px;cursor:pointer">إغلاق</button></div><div style="position:relative;display:inline-block;width:100%"><img src="${fmImageSrc}" style="width:100%;display:block">${boxesHTML}</div></body></html>`);
   }else{
-    const rows=fm.boxes.map(b=>`<tr><td style="font-weight:bold;background:#f9f9f9;padding:7px 12px;border:1px solid #ddd;width:35%;font-size:${fs}px">${b.label}</td><td style="padding:7px 12px;border:1px solid #ddd;font-size:${fs}px">${getData(b.key)}</td></tr>`).join('');
-    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>${fm.name}</title><style>body{font-family:Arial;padding:30px;direction:rtl}@media print{.noprint{display:none}}</style></head><body><div class="noprint" style="margin-bottom:14px;display:flex;gap:8px"><button onclick="window.print()" style="padding:8px 18px;background:#C9A84C;color:#111;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ طباعة</button><button onclick="window.close()" style="padding:8px 14px;border:1px solid #ccc;border-radius:6px;cursor:pointer">إغلاق</button></div><h2 style="border-bottom:2px solid #C9A84C;padding-bottom:8px">${fm.name} — ${c.firstName||''} ${c.fatherName||''} ${c.lastName||''}</h2><table style="width:100%;border-collapse:collapse;margin-top:14px">${rows}</table></body></html>`);
+    const rows=fm.boxes.map(b=>{
+      const _v=(b.key==='__request__')?esc(reqText):getData(b.key);
+      const _ws=(b.key==='__request__')?'white-space:pre-wrap;':'';
+      return `<tr><td style="font-weight:bold;background:#f9f9f9;padding:7px 12px;border:1px solid #ddd;width:35%;font-size:${fs}px">${b.label}</td><td style="padding:7px 12px;border:1px solid #ddd;font-size:${fs}px;${_ws}">${_v}</td></tr>`;
+    }).join('');
+    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>${fm.name}</title><style>body{font-family:Arial;padding:30px;direction:rtl}@media print{.noprint{display:none}}</style></head><body><div class="noprint" style="margin-bottom:14px;display:flex;gap:8px"><button onclick="window.print()" style="padding:8px 18px;background:#C9A84C;color:#111;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ طباعة</button><button onclick="window.close()" style="padding:8px 14px;border:1px solid #ccc;border-radius:6px;cursor:pointer">إغلاق</button></div><h2 style="border-bottom:2px solid #C9A84C;padding-bottom:8px">${fm.name} — ${citName(c)}</h2><table style="width:100%;border-collapse:collapse;margin-top:14px">${rows}</table></body></html>`);
   }
   w.document.close();
 }
@@ -5186,6 +5411,7 @@ function fbFieldIcon(key){
   if(key.includes('address')||key.includes('town')||key.includes('district')) return '📍';
   if(key.includes('registry')||key.includes('Registry')) return '📜';
   if(key.includes('national')||key.includes('passport')) return '🪪';
+  if(key==='__request__') return '📋';
   if(key.startsWith('extra_')) return '⭐';
   return '📝';
 }
@@ -5453,6 +5679,7 @@ function previewFormBuild(){
   function getPreviewData(key){
     if(key==='serialNumber') return formatSerial(nextSerial());
     if(key==='txnNote') return '[ ملاحظات المعاملة تظهر عند الطباعة ]';
+    if(key==='__request__') return '[ المعاملات المطلوبة تظهر عند الطباعة ]';
     if(key.startsWith('extra_')){
       const efId=key.replace('extra_','');
       const ef=extraFields.find(function(e){return e.id===efId;});
@@ -5495,7 +5722,7 @@ function previewFormBuild(){
       +'<button onclick="window.print()" style="margin-right:auto;padding:7px 16px;background:#C9A84C;color:#111;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700">🖨️ طباعة</button>'
       +'<button onclick="window.close()" style="padding:7px 14px;border:1px solid #ccc;border-radius:6px;cursor:pointer">إغلاق</button>'
       +'</div>'
-      +'<h2 style="border-bottom:2px solid #C9A84C;padding-bottom:8px">'+name+(citizen?' — '+( citizen.firstName||'')+' '+(citizen.fatherName||''):' — (بيانات تجريبية)')+'</h2>'
+      +'<h2 style="border-bottom:2px solid #C9A84C;padding-bottom:8px">'+name+(citizen?' — '+citName(citizen):' — (بيانات تجريبية)')+'</h2>'
       +'<table style="width:100%;border-collapse:collapse;margin-top:14px"><tbody>'+rows+'</tbody></table>'
       +'</body></html>');
   }
@@ -5508,7 +5735,7 @@ function saveFormBuild(){
   if(fbBoxes.length===0){notify('⚠️ أضف حقولاً أولاً','warn');return;}
   const name=document.getElementById('fb_name').value.trim()||'نموذج '+(forms.length+1);
   const fontSize=parseInt(document.getElementById('fb_fontSize').value)||16;
-  forms.push({id:'f_'+Date.now(),name,boxes:fbBoxes,image:fbImg,hasImage:!!fbImg,fontSize});
+  forms.push({id:'f_'+Date.now(),name,boxes:fbBoxes,image:fbImg,hasImage:!!fbImg,fontSize,reg:activeReg});
   saveForms();notify('✅ تم حفظ النموذج: '+name);showPage('forms',document.querySelectorAll('.nav-item')[4]);
 }
 
@@ -6694,13 +6921,22 @@ showPage=function(page,navEl){
 
 // ===== HELPERS =====
 function getAllFields(){
-  // استخدم ALL_DEFAULT_FIELDS الذي يحتوي على الترتيب الصحيح
-  const base = [...ALL_DEFAULT_FIELDS];
-  // أضف الحقول الإضافية
-  extraFields.forEach(ef=>base.push({key:'extra_'+ef.id,label:ef.label}));
+  // الرقم التسلسلي + حقول الملف النشط المخصّصة + عنصر بيان الطلب
+  const base=[{key:'serial',label:'🔢 الرقم التسلسلي'}];
+  extraFields.filter(ef=>(ef.reg||'lb')===activeReg).forEach(ef=>base.push({key:'extra_'+ef.id,label:ef.label}));
+  base.push({key:'__request__',label:'بيان الطلب (المعاملات المطلوبة)'});
   return base;
 }
-function openAddModal(){document.getElementById('addModal').style.display='block';['nFirst','nFather','nLast','nReg'].forEach(id=>document.getElementById(id).value='');}
+function openAddModal(){
+  const rl=document.getElementById('addRegLabel'); if(rl)rl.textContent=regIcon(activeReg)+' '+regLabel(activeReg);
+  const sp=document.getElementById('addSerialPreview'); if(sp)sp.textContent='#'+nextCitizenSerial(activeReg);
+  const tf=citTitleField(activeReg);
+  const wrap=document.getElementById('addTitleWrap'), lbl=document.getElementById('addTitleLabel'), inp=document.getElementById('nTitle');
+  if(inp)inp.value='';
+  if(wrap){ if(tf){ wrap.style.display=''; if(lbl)lbl.textContent=tf.label; if(inp)inp.placeholder=tf.label; } else { wrap.style.display='none'; } }
+  document.getElementById('addModal').style.display='block';
+  if(tf&&inp)setTimeout(()=>inp.focus(),100);
+}
 function closeModal(id){
   document.getElementById(id).style.display='none';
   if(id==='stampModal'){const gs=document.getElementById('stGroupSel');if(gs)gs.disabled=false;const is=document.getElementById('stItemSel');if(is)is.disabled=false;}
@@ -6708,10 +6944,13 @@ function closeModal(id){
   _fbApplyPendingRefresh(); // ✅ طبّق أي تحديث مؤجَّل من الزملاء بعد إغلاق النافذة
 }
 function addCitizen(){
-  const first=document.getElementById('nFirst').value.trim();
-  if(!first){notify('❌ أدخل الاسم الأول','red');return;}
-  const c={id:Date.now().toString(),firstName:first,fatherName:document.getElementById('nFather').value.trim(),lastName:document.getElementById('nLast').value.trim(),registryNum:document.getElementById('nReg').value.trim(),nationality:document.getElementById('nNat').value,extra:{},createdAt:Date.now(),updatedAt:Date.now()};
-  citizens.unshift(c);saveC();closeModal('addModal');renderSideList();selectCitizen(c.id);notify('✅ تمت الإضافة');
+  const reg=activeReg;
+  const c={id:Date.now().toString(),reg,serial:nextCitizenSerial(reg),extra:{},createdAt:Date.now(),updatedAt:Date.now()};
+  const tf=citTitleField(reg);
+  if(tf){ const el=document.getElementById('nTitle'); const v=el?(el.value||'').trim():''; if(v)c.extra[tf.id]=v; }
+  citizens.unshift(c);saveC();closeModal('addModal');
+  const si=document.querySelector('.sidebar-search input'); renderSideList(si?si.value:'');
+  selectCitizen(c.id);notify('✅ تمت إضافة السجل #'+c.serial+' في ملف '+regLabel(reg));
 }
 
 // ═══════ صور المواطنين (IndexedDB) ═══════
@@ -6776,7 +7015,7 @@ function pickForm(i){
   var fm=forms[i];
   if(!fm)return;
   closeModal('formPickerModal');
-  previewForm(fm.id, window._pickerTxnId);
+  previewFormPrompt(fm.id, window._pickerTxnId);
 }
 </script>
 
@@ -6938,12 +7177,20 @@ function pickForm(i){
 <!-- Pre-print note modal -->
 <div id="printNoteModal" style="display:none">
   <div class="modal-overlay">
-    <div class="modal-box" style="width:460px">
-      <div class="modal-title">🖨️ ملاحظة قبل الطباعة</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">اكتب ما تريد إضافته على النموذج المطبوع (مثال: <span style="color:var(--gold)">إخراج قيد فردي لابني</span>)، أو اتركه فارغاً.</div>
-      <div class="form-field" style="margin-bottom:16px">
-        <label>بيان / سبب الطلب</label>
-        <textarea id="printNoteText" rows="4" placeholder="اكتب هنا..." style="padding:10px 12px;background:var(--navy3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:14px;resize:vertical;direction:rtl;line-height:1.8;width:100%" onkeydown="if(event.ctrlKey&&event.key==='Enter'){confirmPrintNote();}"></textarea>
+    <div class="modal-box" style="width:500px;max-width:94vw;max-height:88vh;overflow-y:auto">
+      <div class="modal-title">🖨️ بيان الطلب قبل الطباعة</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">اختر المعاملة أو المعاملات المطلوبة (اضغط على المعاملة أكثر من مرة لزيادة العدد)، ثم أضف ملاحظة إن لزم.</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">المعاملات الجاهزة:</div>
+      <div id="printReqChips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"></div>
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <input id="printReqNewType" placeholder="+ أضف نوع معاملة جديد إلى القائمة" style="flex:1;padding:8px 11px;background:var(--navy3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:Cairo,sans-serif;font-size:12.5px;direction:rtl" onkeydown="if(event.key==='Enter'){event.preventDefault();printReqAddType();}">
+        <button class="btn btn-outline" onclick="printReqAddType()" style="font-size:12px;padding:6px 14px;white-space:nowrap">إضافة</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">الطلب الحالي:</div>
+      <div id="printReqList" style="margin-bottom:14px"></div>
+      <div class="form-field" style="margin-bottom:14px">
+        <label>إضافات / ملاحظة خاصة (اختياري)</label>
+        <textarea id="printNoteText" rows="2" placeholder="مثال: مستعجل، نسخة مصدّقة، تسليم لشخص آخر..." style="padding:10px 12px;background:var(--navy3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:Cairo,sans-serif;font-size:14px;resize:vertical;direction:rtl;line-height:1.8;width:100%" onkeydown="if(event.ctrlKey&&event.key==='Enter'){confirmPrintNote();}"></textarea>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Ctrl+Enter للطباعة السريعة</div>
       <div class="modal-actions">
