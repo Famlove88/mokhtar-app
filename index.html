@@ -342,6 +342,14 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
 .form-grid{display:flex;flex-wrap:wrap;gap:12px;}  /* ✅ تغيير من grid إلى flex للترتيب السلس */
 .form-grid .form-field{flex:1 1 calc(50% - 6px);}  /* ✅ حقول بعرض 50% لإظهار عمودين */
 .form-grid .form-field.full{flex:1 1 100%;}  /* ✅ حقول ممتدة على كامل العرض */
+/* ══ نظام السحب الموحّد (ماوس + لمس) ══ */
+.sort-handle{touch-action:none;-ms-touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;}
+.sort-handle:active{cursor:grabbing;}
+.fm-row{transition:box-shadow .12s ease, opacity .12s ease;}
+.ft-draggable{transition:box-shadow .12s ease;}
+.sort-dragging{box-shadow:0 12px 28px rgba(0,0,0,.5)!important;z-index:60;position:relative;opacity:.96;}
+.sort-target-before{box-shadow:0 -3px 0 0 var(--gold) inset!important;}
+.sort-target-after{box-shadow:0 3px 0 0 var(--gold) inset!important;}
 .form-grid.g3{display:flex;flex-wrap:wrap;gap:12px;}  /* ✅ flex بدلاً من grid */
 .form-grid.g3 .form-field{flex:1 1 calc(33.33% - 8px);}  /* ✅ 3 أعمدة */
 .form-grid.g4{display:flex;flex-wrap:wrap;gap:12px;}  /* ✅ flex بدلاً من grid */
@@ -1129,6 +1137,7 @@ let citizens=[],extraFields=[],forms=[],textForms=[],transactions=[],debts=[],st
 let fieldLayout=[]; // {key, label, tab, hidden, isExtra}
 let _stampModalType='شراء';
 let currentCitId=null,currentPage='dashboard',currentTab='personal';
+let _renderedCitId=null; // المواطن المعروض فعلاً على الشاشة (لالتقاط بياناته بأمان دون اختلاط)
 let editingFormId=null,editFbBoxes=[],editFbImg=null,editFbDrag=null,editFbOX=0,editFbOY=0;
 let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
@@ -1555,6 +1564,7 @@ function loadAll(){
   if(!serviceTypes.length) serviceTypes=['شهادة ميلاد','قيد عائلي','إفادة','شهادة وفاة','تصديق','شهادة زواج','هوية','جواز سفر','وثيقة سفر','إقامة'];
   if(!stampCategories.length) stampCategories=['طابع مالي','طابع بلدي','طابع دولة','طابع قضائي','طابع مالية','طابع نفوس'];
   loadFieldLayout();
+  migrateAndNormalizeFields(); // ✅ وحّد نظام الحقول للشكل النظيف بعد تحميل extraFields و fieldLayout
   loadPerms();
   try{const _v=localStorage.getItem(AGK);if(_v)agents=JSON.parse(_v);}catch(_e){}
   try{const _v=localStorage.getItem(CTK);if(_v)compoundTxns=JSON.parse(_v);}catch(_e){}
@@ -1705,7 +1715,7 @@ function _fbApplyKey(key,value){
   }
   // ✅ استخدم دمج ذكي بدلاً من الاستبدال الكامل
   if(key===SK&&arr(value)){citizens=smartMergeData(citizens,arr(value));localStorage.setItem(SK,JSON.stringify(citizens));return true;}
-  if(key===EK&&arr(value)){extraFields=smartMergeData(extraFields,arr(value));localStorage.setItem(EK,JSON.stringify(extraFields));return true;}
+  if(key===EK&&arr(value)){extraFields=smartMergeData(extraFields,arr(value));localStorage.setItem(EK,JSON.stringify(extraFields));migrateAndNormalizeFields();return true;} // ✅ ثم توحيد الحقول
   if(key===FK&&arr(value)){forms=smartMergeData(forms,arr(value));localStorage.setItem(FK,JSON.stringify(forms));return true;} // ✅ حماية من حذف النماذج الجديدة
   if(key===TFK&&arr(value)){textForms=smartMergeData(textForms,arr(value));localStorage.setItem(TFK,JSON.stringify(textForms));return true;}
   if(key===TK&&arr(value)){transactions=smartMergeData(transactions,arr(value));localStorage.setItem(TK,JSON.stringify(transactions));return true;}
@@ -1718,7 +1728,7 @@ function _fbApplyKey(key,value){
   if(key===AGK&&arr(value)){agents=smartMergeData(agents,arr(value));localStorage.setItem(AGK,JSON.stringify(agents));return true;}
   if(key===PKK&&value&&typeof value==='object'){userPerms=value;localStorage.setItem(PKK,JSON.stringify(userPerms));return true;}
   if(key===UKK&&value&&typeof value==='object'){extraUsers=value;localStorage.setItem(UKK,JSON.stringify(extraUsers));return true;}
-  if(key===FLK&&arr(value)){fieldLayout=arr(value);localStorage.setItem(FLK,JSON.stringify(fieldLayout));return true;} // ✅ استعادة من Firebase
+  if(key===FLK&&arr(value)){fieldLayout=arr(value);migrateAndNormalizeFields();return true;} // ✅ استعادة من Firebase ثم توحيد
   if(key===CTK&&arr(value)){compoundTxns=smartMergeData(compoundTxns,arr(value));localStorage.setItem(CTK,JSON.stringify(compoundTxns));return true;}
   return false;
 }
@@ -1730,11 +1740,43 @@ function _fbApplyKey(key,value){
 // مطبَّقة محلياً بالفعل، فتجاهلها يمنع "ارتجاف" الواجهة أو فقدان موضع التحرير.
 var _fbUnsubs=[];
 var _fbRenderTimer=null;
+var _fbPendingRefresh=false;
+// هل المستخدم منشغل الآن؟ (يكتب في حقل / نافذة منبثقة مفتوحة / يسحب حقلاً / داخل ملف مواطن)
+// إن كان كذلك، لا نُعيد بناء الواجهة حتى لا "نطرده" من الملف الذي يحرره ولا نفقد ما يكتبه.
+function _fbUserIsBusy(){
+  try{
+    var modals=document.querySelectorAll('[id$="Modal"]');
+    for(var i=0;i<modals.length;i++){
+      var dsp=modals[i].style.display;
+      if(dsp&&dsp!=='none')return true; // نافذة منبثقة مفتوحة (معاملة / حقل سريع / ...)
+    }
+    var ae=document.activeElement;
+    if(ae){var tag=(ae.tagName||'').toUpperCase();
+      if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return true;} // المستخدم يكتب الآن
+    if(window._sortActive)return true; // عملية سحب/ترتيب حقل جارية
+    if(currentPage==='citizen_detail')return true; // داخل ملف مواطن مفتوح للتحرير
+  }catch(_e){}
+  return false;
+}
+// يُطبَّق التحديث المؤجَّل من الزملاء بمجرد أن يفرغ المستخدم (إغلاق نافذة / مغادرة الملف)
+function _fbApplyPendingRefresh(){
+  if(_fbPendingRefresh&&!_fbUserIsBusy()){
+    _fbPendingRefresh=false;
+    renderSideList();
+    showPage(currentPage||'dashboard');
+  }
+}
 function _fbScheduleRerender(){
   if(_fbRenderTimer)clearTimeout(_fbRenderTimer);
   _fbRenderTimer=setTimeout(function(){
     _fbRenderTimer=null;
     _migrateSerials();
+    // ✅ لا تُعِد بناء الواجهة أثناء عمل المستخدم. البيانات وصلت بالفعل ودُمجت في الذاكرة
+    // وحُفظت محلياً (في _fbApplyKey)، وستظهر تلقائياً حالما يُغلق المستخدم النافذة أو
+    // يغادر الملف أو ينتقل لمواطن آخر. هذا يمنع طرد المستخدم من الملف الذي يحرّره
+    // عندما يُدخل زميل بياناتٍ من جهاز آخر، ويمنع فقدان ما لم يُحفظ بعد.
+    if(_fbUserIsBusy()){_fbPendingRefresh=true;return;}
+    _fbPendingRefresh=false;
     renderSideList();
     showPage(currentPage||'dashboard');
   },250);
@@ -1751,7 +1793,7 @@ function _fbStartLiveSync(){
       if(dd.by===_fbClientId)return; // تعديلنا نحن، تجاهل الصدى
       var changed=_fbApplyKey(key,dd.data);
       if(changed){
-        notify('☁️ تحديث جديد من زميل آخر');
+        notify(_fbUserIsBusy()?'☁️ وصل تحديث من زميل — سيظهر بعد أن تُنهي عملك الحالي':'☁️ تحديث جديد من زميل آخر');
         _fbScheduleRerender();
       }
     },function(e){
@@ -1865,7 +1907,26 @@ function saveWaTemplates(){try{localStorage.setItem(WAK,JSON.stringify(waTemplat
 function saveCash(){try{localStorage.setItem(CK,JSON.stringify(cashEntries));}catch(e){} if(window._fbReady)_fbSet(CK,cashEntries);}
 function saveServiceTypes(){try{localStorage.setItem(SVCK,JSON.stringify(serviceTypes));}catch(e){} if(window._fbReady)_fbSet(SVCK,serviceTypes);}
 function saveStampCategories(){try{localStorage.setItem(STCK,JSON.stringify(stampCategories));}catch(e){} if(window._fbReady)_fbSet(STCK,stampCategories);}
-function saveFieldLayout(){try{localStorage.setItem(FLK,JSON.stringify(fieldLayout));}catch(e){} if(window._fbReady)_fbSet(FLK,fieldLayout);} // ✅ يحفظ في Firebase أيضاً
+// ✅ يزيل أي حقل مكرّر (بنفس key) من fieldLayout مع الحفاظ على أول ظهور وترتيبه.
+// يُستدعى عند كل حفظ/تحميل/مزامنة، فيمنع تراكم نسخ مكرّرة لنفس الحقل (سبب تكرار "محل الولادة").
+function dedupeFieldLayout(){
+  if(!Array.isArray(fieldLayout))return;
+  const seen=new Set();const out=[];
+  fieldLayout.forEach(f=>{
+    if(!f||!f.key)return;        // تجاهل العناصر التالفة
+    if(seen.has(f.key))return;   // ✅ احذف النسخة المكرّرة
+    seen.add(f.key);out.push(f);
+  });
+  fieldLayout=out;
+}
+function saveFieldLayout(){
+  // المنظّم الوحيد: يحوّل كل إدخال إلى الشكل النحيف {key,tab,hidden,full} ويزيل التكرار ثم يحفظ.
+  const seen=new Set(); const lean=[];
+  (fieldLayout||[]).forEach(f=>{ if(!f||!f.key||seen.has(f.key))return; seen.add(f.key); lean.push({key:f.key, tab:f.tab, hidden:!!f.hidden, full:!!f.full}); });
+  fieldLayout=lean;
+  try{localStorage.setItem(FLK,JSON.stringify(fieldLayout));}catch(e){}
+  if(window._fbReady)_fbSet(FLK,fieldLayout);
+}
 function saveAgents(){try{localStorage.setItem(AGK,JSON.stringify(agents));}catch(e){} if(window._fbReady)_fbSet(AGK,agents);}
 function saveCompoundTxns(){try{localStorage.setItem(CTK,JSON.stringify(compoundTxns));}catch(e){} if(window._fbReady)_fbSet(CTK,compoundTxns);}
 function loadFieldLayout(){
@@ -1873,6 +1934,7 @@ function loadFieldLayout(){
     const v=localStorage.getItem(FLK);
     if(v){
       fieldLayout=JSON.parse(v);
+      dedupeFieldLayout(); // ✅ نظّف أي تكرار قديم محفوظ فور التحميل
       // ✅ احتفظ بالترتيب المحفوظ كما هو - لا تعيد تنظيمه!
       return;
     }
@@ -1917,50 +1979,52 @@ const DEFAULT_FIELDS_DOCS=[
   {key:'statelessDoc',label:'وثيقة عديم الجنسية',tab:'docs'},{key:'refugeeNum',label:'رقم اللاجئ UNHCR',tab:'docs'},
 ];
 const ALL_DEFAULT_FIELDS=[...DEFAULT_FIELDS_PERSONAL,...DEFAULT_FIELDS_ADDRESS,...DEFAULT_FIELDS_REGISTRY,...DEFAULT_FIELDS_DOCS];
-function getEffectiveLayout(){
-  // ✅ استخدم fieldLayout كـ source of truth للترتيب
-  let result = [];
-  
-  // 1. ابدأ بـ fieldLayout المحفوظ (يحتوي على الترتيب الصحيح من السحب والإفلات)
-  if(fieldLayout && fieldLayout.length > 0){
-    // أضف جميع الحقول المحفوظة مع احترام ترتيبها
-    fieldLayout.forEach(f => {
-      result.push(f);
-    });
-    
-    // 2. أضف أي حقول افتراضية جديدة لم تكن في fieldLayout
-    const savedKeys = new Set(fieldLayout.map(f=>f.key));
-    ALL_DEFAULT_FIELDS.forEach(f=>{
-      if(!savedKeys.has(f.key)){
-        result.push({...f, hidden: false});
-      }
-    });
-  } else {
-    // إذا لم يكن هناك fieldLayout محفوظ، استخدم القيمة الافتراضية
-    const saved = fieldLayout.filter(f=>!f.isExtra);
-    const savedKeys = new Set(saved.map(f=>f.key));
-    result.push(...saved);
-    ALL_DEFAULT_FIELDS.forEach(f=>{if(!savedKeys.has(f.key))result.push({...f, hidden: false});});
-    
-    const extraInLayout = fieldLayout.filter(f=>f.isExtra);
-    extraInLayout.forEach(saved => {
-      const original = extraFields.find(x=>x.id===saved.efId);
-      if(original){
-        result.push({key: 'extra_' + saved.efId, label: saved.label || original.label, tab: saved.tab || 'extra', isExtra: true, efId: saved.efId, efType: saved.efType || original.type, efOpts: saved.efOpts || original.options, hidden: saved.hidden === true, col: saved.col});
-      } else {
-        result.push({key: 'extra_' + saved.efId, label: saved.label, tab: saved.tab || 'extra', isExtra: true, efId: saved.efId, efType: saved.efType, efOpts: saved.efOpts, hidden: saved.hidden === true, col: saved.col});
-      }
-    });
+// ══════════════════════════════════════════════════════════════════════════
+//  نظام الحقول — مصدر واحد لكل معلومة
+//  • التعريفات: الافتراضية في ALL_DEFAULT_FIELDS ، المخصّصة في extraFields (مكان واحد لكل حقل).
+//  • fieldLayout نحيف: فقط {key, tab, hidden, full} = الترتيب/القسم/الإظهار/العرض.
+//  • getEffectiveLayout = الدالة الوحيدة التي تُجمّع الوصف الكامل لكل حقل، بترتيب حاسم وبلا تكرار.
+//  • بيانات المواطن: الافتراضية c[key] ، المخصّصة c.extra[efId] (دون أي تغيير).
+//  • مفتاح الحقل: الافتراضي "firstName" ، المخصّص "extra_<efId>" (متوافق مع النماذج والتقارير).
+// ══════════════════════════════════════════════════════════════════════════
+function _efIdOfKey(key){ return String(key||'').startsWith('extra_') ? String(key).slice(6) : null; }
+function fieldElId(f){ return f.isExtra ? ('ef_'+f.efId) : ('f_'+f.key); } // معرّف عنصر الإدخال
+function fieldGetVal(f,c){ return f.isExtra ? (((c&&c.extra)||{})[f.efId]||'') : ((c&&c[f.key])||''); }
+// يبني الوصف الكامل لحقلٍ من مفتاحه + إدخال التخطيط النحيف (tab/hidden/full)
+function _descriptor(key, le){
+  const efId=_efIdOfKey(key);
+  if(efId){
+    const e=extraFields.find(x=>x.id===efId);
+    if(!e) return null; // تعريف الحقل المخصّص غير موجود ⟵ يُتجاهل
+    return {key:'extra_'+efId, label:e.label, tab:(le&&le.tab)||'extra',
+            type:e.type||'text', options:e.options||[],
+            hidden:!!(le&&le.hidden), full:(le&&le.full!=null)?!!le.full:(e.type==='textarea'),
+            isExtra:true, efId:efId, staticValue:e.staticValue||''};
   }
-  
-  // أضف أي حقول إضافية جديدة لم تكن محفوظة
-  extraFields.forEach(ef=>{
-    if(!result.find(x=>x.efId===ef.id&&x.isExtra)){
-      result.push({key: 'extra_' + ef.id, label: ef.label, tab: 'extra', isExtra: true, efId: ef.id, efType: ef.type, efOpts: ef.options, hidden: false});
-    }
+  const d=ALL_DEFAULT_FIELDS.find(x=>x.key===key);
+  if(!d) return null; // حقل افتراضي غير معروف ⟵ يُتجاهل
+  return {key:d.key, label:d.label, tab:(le&&le.tab)||d.tab,
+          type:d.type||'text', options:d.opts||[],
+          hidden:!!(le&&le.hidden), full:(le&&le.full!=null)?!!le.full:(d.type==='textarea'),
+          isExtra:false, efId:null, staticValue:''};
+}
+function _leanField(d){ return {key:d.key, tab:d.tab, hidden:!!d.hidden, full:!!d.full}; }
+// الدالة الوحيدة: تُعيد قائمة الأوصاف الكاملة بترتيبها، كاملة (كل الافتراضية والمخصّصة) وبلا تكرار.
+function getEffectiveLayout(){
+  const out=[], seen=new Set();
+  (fieldLayout||[]).forEach(le=>{
+    if(!le||!le.key||seen.has(le.key))return;
+    const d=_descriptor(le.key, le); if(!d)return;
+    seen.add(d.key); out.push(d);
   });
-  
-  return result;
+  ALL_DEFAULT_FIELDS.forEach(df=>{ if(!seen.has(df.key)){ const d=_descriptor(df.key,null); if(d){seen.add(d.key);out.push(d);} } });
+  extraFields.forEach(e=>{ const k='extra_'+e.id; if(!seen.has(k)){ const d=_descriptor(k,null); if(d){seen.add(d.key);out.push(d);} } });
+  return out;
+}
+// يُستدعى مرة عند الإقلاع: يحوّل أي تخطيط قديم/تالف إلى الشكل النحيف الموحّد مع حفظ الترتيب.
+function migrateAndNormalizeFields(){
+  fieldLayout=getEffectiveLayout().map(_leanField);
+  try{localStorage.setItem(FLK,JSON.stringify(fieldLayout));}catch(e){}
 }
 // ===== AUTH =====
 function doLogin(){
@@ -2016,8 +2080,10 @@ function doLogout(){
 
 // ===== NAV =====
 function showPage(page,navEl){
-  // حفظ الترتيب الحالي قبل مغادرة الصفحة
+  // حفظ بيانات المواطن وترتيب الحقول قبل مغادرة الصفحة
   if(currentPage==='citizen_detail'){
+    const c=_captureCitizenFields(); // ✅ يكتب للمواطن المعروض فعلاً (_renderedCitId) — آمن حتى عند الانتقال لمواطن آخر
+    if(c){c.updatedAt=Date.now();saveC();} // ✅ احفظ البيانات طبيعياً قبل المغادرة حتى لا يضيع أي حقل
     saveFieldOrderFromDOM();
     saveFieldLayout();
   }
@@ -2050,39 +2116,20 @@ function showPage(page,navEl){
 const TAB_LABELS={'personal':'👤 شخصية','address':'📍 عنوان','registry':'📜 نفوس','docs':'🪪 وثائق','extra':'➕ إضافية'};
 function saveExtraFieldsOrder(){
   const cards = Array.from(document.querySelectorAll('.ef-card'));
-  const newOrder = [];
   const efMap = new Map();
-  
-  extraFields.forEach(ef => {
-    efMap.set(ef.id, ef);
+  extraFields.forEach(ef => efMap.set(ef.id, ef));
+  const newOrder = [];
+  cards.forEach(card => {
+    const btn = card.querySelector('button'); if(!btn)return;
+    const m=(btn.getAttribute('onclick')||'').match(/delEF\('([^']+)'\)/);
+    if(m && efMap.has(m[1])) newOrder.push(efMap.get(m[1]));
   });
-  
-  cards.forEach((card, idx) => {
-    const btn = card.querySelector('button');
-    const onclick = btn.getAttribute('onclick');
-    const match = onclick.match(/delEF\('([^']+)'\)/);
-    if(match){
-      const efId = match[1];
-      const ef = efMap.get(efId);
-      if(ef){
-        newOrder.push(ef);
-        const inLayout = fieldLayout.find(f=>f.isExtra&&f.efId===efId);
-        if(!inLayout){
-          fieldLayout.push({key:'extra_'+efId,label:ef.label,tab:'extra',isExtra:true,efId:efId,efType:ef.type,efOpts:ef.options,hidden:false});
-        }
-      }
-    }
-  });
-  
+  extraFields.forEach(ef=>{ if(!newOrder.includes(ef)) newOrder.push(ef); }); // احتياط
   extraFields = newOrder;
   saveEF();
-  
-  fieldLayout = fieldLayout.filter(f=>!f.isExtra);
-  extraFields.forEach(ef => {
-    fieldLayout.push({key:'extra_'+ef.id,label:ef.label,tab:'extra',isExtra:true,efId:ef.id,efType:ef.type,efOpts:ef.options,hidden:false});
-  });
+  // تأكد أن لكل حقل مخصّص إدخالاً في التخطيط، دون تغيير قسم أو ترتيب الموجود
+  extraFields.forEach(ef => { if(!fieldLayout.find(f=>f.key==='extra_'+ef.id)) fieldLayout.push({key:'extra_'+ef.id,tab:'extra',hidden:false,full:(ef.type==='textarea')}); });
   saveFieldLayout();
-  
   notify('✅ تم حفظ الترتيب');
 }
 
@@ -2131,7 +2178,7 @@ function renderFieldManagerPage(){
   let html=`
     <div class="page-header">
       <div><div class="page-title">🔀 ترتيب وإدارة الحقول</div>
-      <div class="page-sub">اسحب الحقول لإعادة ترتيبها · أخفِ أو أظهر أي حقل · انقلها بين الأقسام · احذف الحقول المخصصة نهائياً</div></div>
+      <div class="page-sub">اسحب من المقبض ⠿ (يعمل باللمس وبالماوس) أو استخدم الأسهم ▲▼ · انقل أي حقل إلى أي قسم من القائمة · أخفِ أو أظهر أي حقل · كل تغيير يُحفظ فوراً</div></div>
       <div class="page-actions">
         <button class="btn btn-blue" onclick="openQuickFieldAdder()">+ حقل جديد</button>
         <button class="btn btn-outline" onclick="resetFieldLayout()">↩️ إعادة ضبط</button>
@@ -2150,13 +2197,18 @@ function renderFieldManagerPage(){
         <span style="font-size:10px;color:var(--text3);font-weight:400;margin-right:8px">${fields.filter(f=>!f.hidden).length} ظاهر · ${fields.filter(f=>f.hidden).length} مخفي</span>
       </div>
       <div class="fm-list" data-tab="${tab}" id="fmList_${tab}" style="display:flex;flex-direction:column;gap:6px">`;
-    fields.forEach(f=>{
-      html+=`<div class="fm-row${f.hidden?' fm-hidden':''}" data-key="${f.key}" data-tab="${tab}" draggable="true"
-        style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${f.hidden?'var(--navy)':'var(--navy2)'};border:1px solid ${f.hidden?'var(--border)':'var(--border2)'};border-radius:9px;cursor:grab;opacity:${f.hidden?'0.45':'1'};transition:all 0.15s">
-        <span style="font-size:20px;color:var(--text3);cursor:grab;line-height:1;user-select:none;flex-shrink:0">⠿</span>
-        <span style="flex:1;font-size:13px;font-weight:${f.hidden?'400':'600'};color:${f.hidden?'var(--text3)':'var(--text)'}">${esc(f.label)}</span>
+    fields.forEach((f,i)=>{
+      const isFirst=i===0, isLast=i===fields.length-1;
+      html+=`<div class="fm-row${f.hidden?' fm-hidden':''}" data-key="${f.key}" data-tab="${tab}"
+        style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;background:${f.hidden?'var(--navy)':'var(--navy2)'};border:1px solid ${f.hidden?'var(--border)':'var(--border2)'};border-radius:9px;opacity:${f.hidden?'0.45':'1'}">
+        <span class="fm-grip sort-handle" title="اسحب لإعادة الترتيب" style="font-size:22px;color:var(--text3);line-height:1;flex-shrink:0;padding:4px 2px">⠿</span>
+        <span style="display:flex;gap:3px;flex-shrink:0">
+          <button onclick="fieldMoveInTab('${f.key}',-1)" ${isFirst?'disabled':''} title="تحريك لأعلى" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--navy3);color:${isFirst?'var(--border2)':'var(--gold)'};cursor:${isFirst?'default':'pointer'};font-size:14px;line-height:1;padding:0">▲</button>
+          <button onclick="fieldMoveInTab('${f.key}',1)" ${isLast?'disabled':''} title="تحريك لأسفل" style="width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--navy3);color:${isLast?'var(--border2)':'var(--gold)'};cursor:${isLast?'default':'pointer'};font-size:14px;line-height:1;padding:0">▼</button>
+        </span>
+        <span style="flex:1 1 110px;min-width:90px;font-size:13px;font-weight:${f.hidden?'400':'600'};color:${f.hidden?'var(--text3)':'var(--text)'}">${esc(f.label)}</span>
         ${f.isExtra?'<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(76,139,201,0.15);color:#88BBE8;flex-shrink:0">مخصص</span>':''}
-        <select onchange="moveFieldToTab('${f.key}',this.value)" title="نقل إلى قسم آخر" style="font-size:11px;padding:5px 8px;background:var(--navy3);border:1px solid var(--border);border-radius:7px;color:var(--text2);font-family:Cairo,sans-serif;flex-shrink:0;direction:rtl">
+        <select onchange="fieldMoveToTab('${f.key}',this.value)" title="نقل إلى قسم آخر" style="font-size:11px;padding:7px 8px;background:var(--navy3);border:1px solid var(--border);border-radius:7px;color:var(--text2);font-family:Cairo,sans-serif;flex-shrink:0;direction:rtl;cursor:pointer">
           ${tabs.map(t=>`<option value="${t}" ${t===tab?'selected':''}>${TAB_LABELS[t]}</option>`).join('')}
         </select>
         <button onclick="toggleFieldHidden('${f.key}')" style="padding:5px 12px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid;font-family:Cairo,sans-serif;transition:all 0.15s;flex-shrink:0;background:${f.hidden?'rgba(76,175,122,0.1)':'rgba(201,76,76,0.08)'};color:${f.hidden?'#7DCCA0':'#E88080'};border-color:${f.hidden?'rgba(76,175,122,0.3)':'rgba(201,76,76,0.25)'}">${f.hidden?'👁️ إظهار':'🙈 إخفاء'}</button>
@@ -2169,79 +2221,166 @@ function renderFieldManagerPage(){
     💡 الحقول الأساسية لا تُحذف نهائياً حماية لسلامة البرنامج — الإخفاء فقط يخفيها من شاشة تعديل المواطن مع حفظ بياناتها. الحقول المخصصة (➕) يمكن حذفها نهائياً، وهذا يحذف قيمتها من كل المواطنين بلا رجعة.
   </div></div>`;
   mp.innerHTML=html;
-  // Activate drag & drop on each tab list
+  // ✅ سحب موحّد سلس (ماوس + لمس) على كل قائمة قسم
   mp.querySelectorAll('.fm-list').forEach(list=>{
-    let dragEl=null;
-    list.querySelectorAll('.fm-row').forEach(row=>{
-      row.addEventListener('dragstart',e=>{
-        dragEl=row;row.style.opacity='0.3';e.dataTransfer.effectAllowed='move';
-        setTimeout(()=>row.style.boxShadow='0 0 0 2px var(--gold)',0);
-      });
-      row.addEventListener('dragend',()=>{
-        row.style.opacity=row.classList.contains('fm-hidden')?'0.45':'1';
-        row.style.boxShadow='';dragEl=null;
-      });
-      row.addEventListener('dragover',e=>{
-        e.preventDefault();
-        if(!dragEl||dragEl===row)return;
-        const rect=row.getBoundingClientRect();
-        if(e.clientY<rect.top+rect.height/2)list.insertBefore(dragEl,row);
-        else list.insertBefore(dragEl,row.nextSibling);
-      });
-    });
-    list.addEventListener('dragover',e=>e.preventDefault());
+    attachSortable(list, '.fm-row', '.sort-handle', function(){ saveFieldLayoutFromPage(); });
   });
 }
-function moveFieldToTab(key,newTab){
-  // ينقل الحقل فوراً (في الذاكرة) إلى DOM القسم الجديد، ثم يُحفظ نهائياً عند الضغط على "حفظ الترتيب"
-  const row=document.querySelector(`.fm-row[data-key="${key}"]`);
-  const targetList=document.getElementById('fmList_'+newTab);
-  if(!row||!targetList)return;
-  row.dataset.tab=newTab;
-  targetList.appendChild(row);
-  saveFieldLayoutFromPage();
-  renderFieldManagerPage();
-  notify('↔️ تم نقل الحقل');
+// ══════════════════════════════════════════════════════════════════
+// نظام السحب الموحّد (Pointer Events): يعمل بالماوس واللمس بنفس الكود،
+// يبدأ من مقبض مخصّص (.sort-handle) فقط — فيبقى التمرير والنقر طبيعيَّيْن،
+// يمنع تمرير الصفحة أثناء السحب، ويمرّر تلقائياً عند الاقتراب من الحواف.
+// container: الحاوية ، itemSel: عناصر السحب ، handleSel: المقبض ، onDrop: يُستدعى بعد إفلات ناجح.
+// ══════════════════════════════════════════════════════════════════
+function attachSortable(container, itemSel, handleSel, onDrop){
+  if(!container || container._sortableOn) return;
+  container._sortableOn = true;
+  var dragEl=null, pid=null, started=false, startX=0, startY=0, lastY=0, scroller=null, rafId=null, capHandle=null;
+  var THRESH=6;
+  function items(){ return Array.prototype.slice.call(container.querySelectorAll(itemSel)); }
+  function getScroller(el){
+    var p=el?el.parentElement:null;
+    while(p){ var s=getComputedStyle(p); if(/(auto|scroll)/.test(s.overflowY) && p.scrollHeight>p.clientHeight+2) return p; p=p.parentElement; }
+    return document.scrollingElement||document.documentElement;
+  }
+  function begin(){
+    started=true;
+    window._sortActive=true; // ✅ يمنع المزامنة من إعادة بناء الصفحة أثناء السحب
+    dragEl.classList.add('sort-dragging');
+    document.body.style.userSelect='none';
+    document.body.style.webkitUserSelect='none';
+    scroller=getScroller(container);
+  }
+  function clearTargets(){ items().forEach(function(o){ o.classList.remove('sort-target-before','sort-target-after'); }); }
+  function move(e){
+    if(!dragEl) return;
+    var dx=e.clientX-startX, dy=e.clientY-startY;
+    if(!started){ if(Math.sqrt(dx*dx+dy*dy)<THRESH) return; begin(); }
+    e.preventDefault();
+    lastY=e.clientY;
+    // أقرب عنصر (بمركزه) لتحديد مكان الإدراج — يصلح للقوائم العمودية وللشبكة بعمودين
+    var others=items().filter(function(o){ return o!==dragEl; });
+    var best=null, bestD=Infinity, before=true;
+    for(var i=0;i<others.length;i++){
+      var r=others[i].getBoundingClientRect();
+      var cx=r.left+r.width/2, cy=r.top+r.height/2;
+      var d=Math.sqrt(Math.pow(e.clientX-cx,2)+Math.pow(e.clientY-cy,2));
+      if(d<bestD){ bestD=d; best=others[i]; before=(e.clientY<cy) || (Math.abs(e.clientY-cy)<3 && e.clientX<cx); }
+    }
+    clearTargets();
+    if(best){
+      best.classList.add(before?'sort-target-before':'sort-target-after');
+      if(before) container.insertBefore(dragEl, best);
+      else container.insertBefore(dragEl, best.nextSibling);
+    }
+    autoScroll();
+  }
+  function autoScroll(){
+    if(rafId) return;
+    var stepFn=function(){
+      if(!started||!dragEl){ rafId=null; return; }
+      var top, bottom;
+      if(scroller===document.scrollingElement||scroller===document.documentElement){ top=0; bottom=window.innerHeight; }
+      else { var rc=scroller.getBoundingClientRect(); top=rc.top; bottom=rc.bottom; }
+      var EDGE=72, SPEED=16;
+      if(lastY<top+EDGE) scroller.scrollTop-=SPEED;
+      else if(lastY>bottom-EDGE) scroller.scrollTop+=SPEED;
+      rafId=requestAnimationFrame(stepFn);
+    };
+    rafId=requestAnimationFrame(stepFn);
+  }
+  function end(){
+    if(capHandle){ try{ capHandle.releasePointerCapture(pid); }catch(_e){} }
+    if(capHandle && capHandle._sref){ capHandle.removeEventListener('pointermove',capHandle._sref.m); capHandle.removeEventListener('pointerup',capHandle._sref.u); capHandle.removeEventListener('pointercancel',capHandle._sref.u); capHandle._sref=null; }
+    if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
+    document.body.style.userSelect=''; document.body.style.webkitUserSelect='';
+    window._sortActive=false;
+    var did=started;
+    clearTargets();
+    if(dragEl) dragEl.classList.remove('sort-dragging');
+    dragEl=null; started=false; pid=null; capHandle=null;
+    if(did && typeof onDrop==='function') onDrop();
+  }
+  container.addEventListener('pointerdown', function(e){
+    if(e.button!=null && e.button!==0) return;       // الزر الأيسر فقط للماوس
+    var handle = e.target.closest(handleSel);
+    if(!handle || !container.contains(handle)) return;
+    var item = e.target.closest(itemSel);
+    if(!item || !container.contains(item)) return;
+    dragEl=item; pid=e.pointerId; started=false; startX=e.clientX; startY=e.clientY; lastY=e.clientY; capHandle=handle;
+    try{ handle.setPointerCapture(pid); }catch(_e){}
+    var m=move, u=end;
+    handle._sref={m:m,u:u};
+    handle.addEventListener('pointermove', m);
+    handle.addEventListener('pointerup', u);
+    handle.addEventListener('pointercancel', u);
+  });
 }
+// ══════ نقل وترتيب الحقول — يعمل مباشرةً على البيانات (موثوق 100% على الموبايل والكمبيوتر) ══════
+// fieldLayout يصبح القائمة الكاملة المرتّبة لكل الحقول، فيمكن وضع أي حقل في أي قسم وبأي ترتيب بلا أخطاء.
+function fieldMoveInTab(key,dir){
+  // dir = -1 تحريك لأعلى ، +1 تحريك لأسفل ، ضمن نفس القسم فقط
+  const full=getEffectiveLayout().map(f=>({...f}));
+  const item=full.find(f=>f.key===key); if(!item)return;
+  const tab=item.tab;
+  const tabKeys=full.filter(f=>f.tab===tab).map(f=>f.key);
+  const at=tabKeys.indexOf(key), to=at+dir;
+  if(to<0||to>=tabKeys.length)return; // عند الحافة — لا تحريك
+  tabKeys[at]=tabKeys[to]; tabKeys[to]=key; // تبديل الموضعين
+  const byKey={}; full.forEach(f=>byKey[f.key]=f);
+  let ti=0;
+  fieldLayout=full.map(f=> f.tab===tab ? byKey[tabKeys[ti++]] : f); // أعد بناء القائمة بالترتيب الجديد للقسم
+  saveFieldLayout();
+  _refreshFieldsUI();
+}
+function _fieldSetTab(key,newTab){
+  // ينقل الحقل إلى أي قسم، ويضعه في نهاية ذلك القسم. يحفظ فوراً.
+  const full=getEffectiveLayout().map(f=>({...f}));
+  const idx=full.findIndex(f=>f.key===key); if(idx===-1)return false;
+  const item=full.splice(idx,1)[0];
+  item.tab=newTab;
+  let insertAt=full.length;
+  for(let i=full.length-1;i>=0;i--){ if(full[i].tab===newTab){ insertAt=i+1; break; } } // بعد آخر حقل في القسم الهدف
+  full.splice(insertAt,0,item);
+  fieldLayout=full;
+  saveFieldLayout();
+  return true;
+}
+function fieldMoveToTab(key,newTab){ // من صفحة "ترتيب الحقول"
+  if(_fieldSetTab(key,newTab)){ _refreshFieldsUI(); notify('↔️ تم نقل الحقل إلى '+(TAB_LABELS[newTab]||newTab)); }
+}
+function moveFieldToTab(key,newTab){ fieldMoveToTab(key,newTab); } // توافق مع أي استدعاء قديم
 function deleteExtraFieldFromManager(efId,label){
   if(!confirm(`حذف الحقل المخصص "${label}" نهائياً؟ سيُحذف من كل المواطنين ولا يمكن التراجع.`))return;
   extraFields=extraFields.filter(e=>e.id!==efId);
   saveEF();
-  // حذف من fieldLayout بجميع الطرق الممكنة
-  fieldLayout=fieldLayout.filter(f=>!(f.isExtra&&f.efId===efId));
+  fieldLayout=fieldLayout.filter(f=>f.key!=='extra_'+efId); // حذف من التخطيط بالمفتاح
   saveFieldLayout();
-  // حذف القيمة المخزّنة من كل المواطنين
-  citizens.forEach(c=>{if(c.extra&&(efId in c.extra))delete c.extra[efId];});
+  citizens.forEach(c=>{if(c.extra&&(efId in c.extra))delete c.extra[efId];}); // حذف القيمة من كل المواطنين
   saveC();
   notify('🗑️ تم حذف الحقل نهائياً');
   renderFieldManagerPage();
 }
 function toggleFieldHidden(key){
-  const layout=getEffectiveLayout();
-  const f=layout.find(x=>x.key===key);
-  if(!f)return;
-  const existing=fieldLayout.find(x=>x.key===key);
-  if(existing){existing.hidden=!existing.hidden;}
-  else{fieldLayout.push({...f,hidden:!f.hidden});}
+  const eff=getEffectiveLayout();
+  if(!eff.find(x=>x.key===key))return;
+  fieldLayout=eff.map(x=>x.key===key?{...x,hidden:!x.hidden}:x).map(_leanField);
   saveFieldLayout();
-  renderFieldManagerPage();
+  _refreshFieldsUI();
 }
 function saveFieldLayoutFromPage(){
+  // يعيد بناء ترتيب التخطيط من صفوف الشاشة (المفتاح + القسم)، مع الحفاظ على الإظهار/العرض من الوصف الحالي.
+  const eff=getEffectiveLayout();
+  const byKey={}; eff.forEach(f=>byKey[f.key]=f);
   const newLayout=[];
   document.querySelectorAll('.fm-list').forEach(list=>{
     list.querySelectorAll('.fm-row').forEach(row=>{
-      const key=row.dataset.key;
-      const tab=row.dataset.tab;
-      const existing=fieldLayout.find(x=>x.key===key);
-      const def=ALL_DEFAULT_FIELDS.find(x=>x.key===key);
-      const ef=key.startsWith('extra_')?extraFields.find(x=>'extra_'+x.id===key):null;
-      const hidden=!!(existing?existing.hidden:false);
-      if(ef){newLayout.push({key,label:ef.label,tab:'extra',isExtra:true,efId:ef.id,efType:ef.type,efOpts:ef.options,hidden});}
-      else if(def){newLayout.push({...def,hidden});}
-      else if(existing){newLayout.push({...existing,hidden});}
-      else{newLayout.push({key,label:key,tab,hidden});}
+      const key=row.dataset.key, tab=row.dataset.tab;
+      const d=byKey[key]; if(!d)return;
+      newLayout.push({key, tab, hidden:!!d.hidden, full:!!d.full});
     });
   });
+  if(!newLayout.length)return;
   fieldLayout=newLayout;
   saveFieldLayout();
   notify('✅ تم حفظ الترتيب');
@@ -3815,6 +3954,7 @@ function filterCitTable(v){const f=v.toLowerCase();renderCitTable(citizens.filte
 function renderCitizenDetail(skipRender=false){
   const c=citizens.find(x=>x.id===currentCitId);
   if(!c){renderCitizensPage();return;}
+  _renderedCitId=c.id; // ✅ هذا هو المواطن المعروض الآن
   const mp=document.getElementById('mainPanel');
   const initials=((c.firstName||'?')[0]+(c.lastName||'?')[0]).toUpperCase();
   mp.innerHTML=`
@@ -3838,173 +3978,180 @@ function renderCitizenDetail(skipRender=false){
         <button class="btn btn-gold" onclick="saveCitizen()">💾 حفظ</button>
       </div>
     </div>
-    <div class="tabs-bar">
-      <button class="tab active" onclick="swTab('personal',this)">👤 شخصية</button>
-      <button class="tab" onclick="swTab('registry',this)">📜 نفوس</button>
-      <button class="tab" onclick="swTab('address',this)">📍 عنوان</button>
-      <button class="tab" onclick="swTab('docs',this)">🪪 وثائق</button>
-      <button class="tab" onclick="swTab('extra',this)">➕ إضافية</button>
-      <button class="tab" onclick="swTab('myforms',this)">📋 نماذجي</button>
-      <button class="tab" onclick="swTab('cit_txns',this)">📑 معاملاته</button>
+    <div class="tabs-bar" style="gap:6px;flex-wrap:wrap;align-items:center">
+      <button id="btnEntryMode" class="tab active" onclick="setArrangeMode(false)" title="إدخال البيانات">✏️ إدخال</button>
+      <button id="btnArrangeMode" class="tab" onclick="setArrangeMode(true)" title="ترتيب وتنظيم الحقول">🔀 ترتيب الحقول</button>
+      <span style="flex:1"></span>
+      <span id="citSaveStatus" style="font-size:12px;color:#7DCCA0;font-weight:600;padding:4px 10px;border-radius:8px;background:rgba(125,204,160,0.1)">✓ محفوظ</span>
+      <button class="tab" onclick="toggleCitPanel('myforms')">📋 نماذجي</button>
+      <button class="tab" onclick="toggleCitPanel('cit_txns')">📑 معاملاته</button>
     </div>
-    <div class="panel-content" id="tabContent"></div>`;
-  renderTabContent('personal',c);
+    <div class="panel-content">
+      <div id="citForm"></div>
+      <div id="tabContent" style="display:none;margin-top:14px"></div>
+    </div>`;
+  _arrangeMode=false; _citPanel=null;
+  renderCitForm(c);
+}
+// ═══════════ شاشة إدخال المواطن — صفحة واحدة سلسة ═══════════
+let _arrangeMode=false, _citPanel=null, _citAutosaveTimer=null;
+function setArrangeMode(on){
+  _captureCitizenFields(); // التقط أي إدخال قبل تبديل الوضع حتى لا يضيع
+  const c=citizens.find(x=>x.id===(_renderedCitId||currentCitId)); if(c){c.updatedAt=Date.now();saveC();}
+  _arrangeMode=!!on;
+  const be=document.getElementById('btnEntryMode'), ba=document.getElementById('btnArrangeMode');
+  if(be)be.classList.toggle('active',!_arrangeMode);
+  if(ba)ba.classList.toggle('active',_arrangeMode);
+  if(c)renderCitForm(c);
+}
+function _setSaveStatus(state){
+  const el=document.getElementById('citSaveStatus'); if(!el)return;
+  if(state==='saving'){ el.textContent='… جارٍ الحفظ'; el.style.color='var(--text3)'; el.style.background='rgba(255,255,255,0.05)'; }
+  else { el.textContent='✓ محفوظ'; el.style.color='#7DCCA0'; el.style.background='rgba(125,204,160,0.1)'; }
+}
+function _scheduleCitAutosave(){
+  _setSaveStatus('saving');
+  clearTimeout(_citAutosaveTimer);
+  _citAutosaveTimer=setTimeout(function(){
+    const c=_captureCitizenFields(); if(c){c.updatedAt=Date.now();saveC();renderSideList();}
+    _setSaveStatus('saved');
+  },600); // حفظ تلقائي بعد التوقف عن الكتابة بثوانٍ — لا يضيع شيء
+}
+function renderCitForm(c){
+  const host=document.getElementById('citForm'); if(!host)return;
+  const SECTIONS=[['personal','👤 معلومات شخصية'],['registry','📜 بيانات النفوس'],['address','📍 العنوان'],['docs','🪪 الوثائق الرسمية والإقامة'],['extra','➕ حقول إضافية']];
+  const eff=getEffectiveLayout();
+  let html='';
+  SECTIONS.forEach(function(s){
+    const tab=s[0], title=s[1];
+    const fields=eff.filter(f=>f.tab===tab && (_arrangeMode || !f.hidden));
+    if(!fields.length && !_arrangeMode && tab==='extra') return; // أخفِ قسم الإضافية الفارغ بوضع الإدخال
+    const grid=fields.length
+      ? `<div class="form-grid">${fields.map(f=>renderField(f,c)).join('')}</div>`
+      : `<p style="color:var(--text3);font-size:12px">لا حقول في هذا القسم.</p>`;
+    const addBtn=_arrangeMode? `<button class="btn btn-outline" onclick="openQuickFieldAdder()" style="font-size:11px;padding:3px 10px;margin-right:auto">+ حقل جديد</button>`:'';
+    html+=`<div class="form-section" data-sec="${tab}"><div class="form-section-title" style="display:flex;align-items:center;gap:10px">${title}${addBtn}</div>${grid}</div>`;
+  });
+  host.innerHTML=html;
+  host.oninput=_scheduleCitAutosave;  // حفظ تلقائي عند أي تعديل
+  host.onchange=_scheduleCitAutosave;
+  if(_arrangeMode)activateFieldDragDrop();
+}
+function toggleCitPanel(kind){
+  const tcEl=document.getElementById('tabContent');
+  const c=citizens.find(x=>x.id===(_renderedCitId||currentCitId)); if(!c||!tcEl)return;
+  if(_citPanel===kind){ tcEl.style.display='none'; _citPanel=null; return; }
+  _citPanel=kind; renderTabContent(kind,c); tcEl.style.display='block';
+  tcEl.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function _refreshFieldsUI(){
+  if(currentPage==='fieldmanager'){ renderFieldManagerPage(); return; }
+  if(currentPage==='citizen_detail'){ const c=citizens.find(x=>x.id===(_renderedCitId||currentCitId)); if(c)renderCitForm(c); }
 }
 function swTab(tab,el){
   currentTab=tab;
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   if(el)el.classList.add('active');
-  renderTabContent(tab,citizens.find(x=>x.id===currentCitId));
+  renderTabContent(tab,citizens.find(x=>x.id===currentCitId)); // يلتقط قيم التبويب السابق ثم يعرض الجديد
+  const c=citizens.find(x=>x.id===currentCitId); if(c)c.updatedAt=Date.now();
+  saveC(); // ✅ ثبّت القيم الملتقطة فور تبديل التبويب حتى لا تضيع
 }
 function fieldCtrlButtons(f){
-  // أزرار التحكم بجانب كل حقل: نقل لقسم آخر + حذف + تبديل العمود (يمين/يسار)
-  const tabs=['personal','address','registry','docs','extra'];
-  const moveSelect=`<select onchange="moveFieldFromDetail('${f.key}',this.value)" title="نقل إلى قسم آخر" style="font-size:10px;padding:2px 4px;background:var(--navy3);border:1px solid var(--border);border-radius:5px;color:var(--text3);font-family:Cairo,sans-serif;direction:rtl;cursor:pointer">
-    ${tabs.map(t=>`<option value="${t}" ${t===f.tab?'selected':''}>${TAB_LABELS[t]}</option>`).join('')}
-  </select>`;
-  const colBtn=`<span onclick="toggleFieldColumn('${f.key}')" title="تبديل الموضع بين يمين/يسار" style="cursor:pointer;font-size:10px;color:var(--text3);padding:1px 6px;border-radius:4px;border:1px solid var(--border)">⇄</span>`;
-  const dragHandle=`<span class="ft-drag-handle" title="اسحب لتغيير الموضع بحرية" style="cursor:grab;font-size:13px;color:var(--text3);padding:0 4px;user-select:none">⠿</span>`;
-  const delBtn=`<span onclick="deleteFieldFromDetail('${f.key}','${esc(f.label).replace(/'/g,"\\'")}',${f.isExtra?`'${f.efId}'`:'null'})" title="حذف هذا الحقل" style="cursor:pointer;font-size:10px;color:#E88080;padding:1px 5px;border-radius:4px;border:1px solid rgba(201,76,76,0.3)">🗑️ حذف</span>`;
-  return `<span style="display:flex;align-items:center;gap:5px">${dragHandle}${colBtn}${moveSelect}${delBtn}</span>`;
-}
-function fieldWrap(f,innerHtml,full,orderIndex){
-  // ✅ إضافة order CSS للحفاظ على الترتيب في form-grid
-  const colStyle=(!full&&f&&f.col)?`grid-column:${f.col===2?'2':'1'}`:'';
-  const orderStyle=orderIndex!==undefined?`order:${orderIndex};`:'';
-  const style=`${colStyle}${orderStyle}`;
-  return `<div class="form-field${full?' full':''} ft-draggable" draggable="true" data-key="${f?f.key:''}" data-tab="${f?f.tab:''}" style="${style}">${innerHtml}</div>`;
-}
-function fi(id,label,val='',type='text',f=null,idx=0){
-  const inner=`<label style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span style="flex:1">${label}</span><span style="display:flex;align-items:center;gap:6px;flex-shrink:0">${f?fieldCtrlButtons(f):''}<span onclick="clearField('f_${id}')" title="مسح الحقل" style="cursor:pointer;font-size:10px;color:var(--text3);padding:1px 5px;border-radius:4px;border:1px solid var(--border);line-height:1.6;transition:all 0.15s" onmouseover="this.style.color='#E88080';this.style.borderColor='rgba(201,76,76,0.4)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">✕ مسح</span></span></label><input type="${type}" id="f_${id}" value="${esc(val)}" placeholder="${label}">`;
-  return f?fieldWrap(f,inner,false,idx):`<div class="form-field">${inner}</div>`;  // ✅ تمرير idx
-}
-function fs(id,label,val='',opts=[],f=null,idx=0){
-  const inner=`<label style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span style="flex:1">${label}</span><span style="display:flex;align-items:center;gap:6px;flex-shrink:0">${f?fieldCtrlButtons(f):''}<span onclick="clearField('f_${id}')" title="مسح الحقل" style="cursor:pointer;font-size:10px;color:var(--text3);padding:1px 5px;border-radius:4px;border:1px solid var(--border);line-height:1.6;transition:all 0.15s" onmouseover="this.style.color='#E88080';this.style.borderColor='rgba(201,76,76,0.4)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">✕ مسح</span></span></label><select id="f_${id}"><option value="">—</option>${opts.map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}</select>`;
-  return f?fieldWrap(f,inner,false,idx):`<div class="form-field">${inner}</div>`;  // ✅ تمرير idx
+  // أزرار التحكم (تظهر في وضع الترتيب فقط): ▲▼ ترتيب · ⇄ عرض · إخفاء · نقل لقسم · حذف · مقبض سحب
+  const tabs=['personal','registry','address','docs','extra'];
+  const S='cursor:pointer;font-size:11px;color:var(--text3);padding:2px 6px;border-radius:5px;border:1px solid var(--border);user-select:none';
+  const up=`<span onclick="fieldMoveInTab('${f.key}',-1)" title="تحريك لأعلى" style="${S}">▲</span>`;
+  const down=`<span onclick="fieldMoveInTab('${f.key}',1)" title="تحريك لأسفل" style="${S}">▼</span>`;
+  const colBtn=`<span onclick="toggleFieldColumn('${f.key}')" title="عرض كامل / نصف" style="${S}">⇄</span>`;
+  const hideBtn=`<span onclick="toggleFieldHidden('${f.key}')" title="${f.hidden?'إظهار':'إخفاء'}" style="${S}">${f.hidden?'👁 إظهار':'🚫 إخفاء'}</span>`;
+  const moveSelect=`<select onchange="moveFieldFromDetail('${f.key}',this.value)" title="نقل إلى قسم آخر" style="font-size:11px;padding:2px 4px;background:var(--navy3);border:1px solid var(--border);border-radius:5px;color:var(--text3);font-family:Cairo,sans-serif;direction:rtl;cursor:pointer">${tabs.map(t=>`<option value="${t}" ${t===f.tab?'selected':''}>${TAB_LABELS[t]}</option>`).join('')}</select>`;
+  const delBtn=`<span onclick="deleteFieldFromDetail('${f.key}','${esc(f.label).replace(/'/g,"\\'")}',${f.isExtra?`'${f.efId}'`:'null'})" title="حذف هذا الحقل" style="cursor:pointer;font-size:11px;color:#E88080;padding:2px 6px;border-radius:5px;border:1px solid rgba(201,76,76,0.3)">🗑️</span>`;
+  const drag=`<span class="ft-drag-handle sort-handle" title="اسحب لتغيير الترتيب" style="font-size:16px;color:var(--text3);padding:2px 5px;cursor:grab">⠿</span>`;
+  return `<span style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">${drag}${up}${down}${colBtn}${hideBtn}${moveSelect}${delBtn}</span>`;
 }
 function clearField(id){const el=document.getElementById(id);if(el){el.value='';el.focus();}}
+// المُصيِّر الموحّد لأي حقل — وضع الإدخال نظيف، ووضع الترتيب يُظهر أدوات التنظيم
+function renderField(f,c){
+  const id=fieldElId(f);
+  const val=fieldGetVal(f,c);
+  const isAuto=(f.type==='today'||f.type==='static');
+  let head;
+  if(_arrangeMode){
+    const tag=f.hidden?` <span style="color:var(--text3);font-size:10px">(مخفي)</span>`:'';
+    head=`<label style="display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap"><span style="flex:1;min-width:90px">${esc(f.label)}${tag}</span>${fieldCtrlButtons(f)}</label>`;
+  } else {
+    const clearBtn=isAuto?'':`<span onclick="clearField('${id}')" title="مسح الحقل" style="cursor:pointer;font-size:10px;color:var(--text3);padding:1px 5px;border-radius:4px;border:1px solid var(--border);line-height:1.6;transition:all 0.15s" onmouseover="this.style.color='#E88080';this.style.borderColor='rgba(201,76,76,0.4)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">✕</span>`;
+    head=`<label style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span style="flex:1">${esc(f.label)}</span>${clearBtn}</label>`;
+  }
+  let input;
+  switch(f.type){
+    case 'select':
+      input=`<select id="${id}"><option value="">—</option>${(f.options||[]).map(o=>`<option value="${esc(o)}" ${val===o?'selected':''}>${o}</option>`).join('')}</select>`; break;
+    case 'combo':
+      input=`<input type="text" id="${id}" value="${esc(val)}" placeholder="${esc(f.label)}" list="dl_${id}" autocomplete="off"><datalist id="dl_${id}">${(f.options||[]).map(o=>`<option value="${esc(o)}">`).join('')}</datalist>`; break;
+    case 'textarea':
+      input=`<textarea id="${id}" rows="4" style="padding:9px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px;width:100%;resize:vertical;line-height:1.7;direction:rtl">${esc(val)}</textarea>`; break;
+    case 'today':
+      input=`<input type="text" id="${id}" value="${esc(todayStr())}" readonly style="background:var(--navy3);cursor:default;color:var(--gold);font-weight:600">`; break;
+    case 'static':
+      input=`<input type="text" id="${id}" value="${esc(f.staticValue||'')}" readonly style="background:var(--navy3);cursor:default;color:#88BBE8;font-weight:600">`; break;
+    case 'date':
+      input=`<input type="date" id="${id}" value="${esc(val)}">`; break;
+    default:
+      input=`<input type="${f.type||'text'}" id="${id}" value="${esc(val)}" placeholder="${esc(f.label)}">`;
+  }
+  const cls=`form-field${f.full?' full':''}${_arrangeMode?' ft-draggable':''}${(_arrangeMode&&f.hidden)?' fld-hidden':''}`;
+  return `<div class="${cls}" data-key="${f.key}" data-tab="${f.tab}"${(_arrangeMode&&f.hidden)?' style="opacity:.55"':''}>${head}${input}</div>`;
+}
 function toggleFieldColumn(key){
-  const layout=getEffectiveLayout();
-  const f=layout.find(x=>x.key===key);
-  if(!f)return;
-  const newCol=(f.col===2)?1:2;
-  const existing=fieldLayout.find(x=>x.key===key);
-  if(existing){existing.col=newCol;}
-  else{fieldLayout.push({...f,col:newCol});}
+  // تبديل عرض الحقل: عمود كامل ⇄ نصف العرض (يعمل فعلياً عبر صنف .full)
+  const eff=getEffectiveLayout();
+  const f=eff.find(x=>x.key===key); if(!f)return;
+  const nf=!f.full;
+  fieldLayout=eff.map(x=>x.key===key?{...x,full:nf}:x).map(_leanField);
   saveFieldLayout();
-  renderTabContent(currentTab,citizens.find(x=>x.id===currentCitId));
+  _refreshFieldsUI();
 }
 function moveFieldFromDetail(key,newTab){
-  const layout=getEffectiveLayout();
-  const f=layout.find(x=>x.key===key);
-  if(!f)return;
-  
-  // ابحث عن الحقل في fieldLayout
-  const existingIndex=fieldLayout.findIndex(x=>x.key===key);
-  
-  if(existingIndex!==-1){
-    // إذا كان موجود، حدّث tab فقط
-    fieldLayout[existingIndex]={...fieldLayout[existingIndex], tab:newTab};
-  } else {
-    // إذا لم يكن موجود، أضفه مع جميع خصائصه
-    fieldLayout.push({...f, tab:newTab});
+  if(_fieldSetTab(key,newTab)){ // ✅ نفس المنطق الموثوق المستخدم في صفحة ترتيب الحقول
+    notify('↔️ تم نقل الحقل إلى '+(TAB_LABELS[newTab]||newTab));
+    _refreshFieldsUI();
   }
-  
-  saveFieldLayout();
-  notify('↔️ تم نقل الحقل إلى '+TAB_LABELS[newTab]);
-  renderTabContent(currentTab,citizens.find(x=>x.id===currentCitId));
 }
 function deleteFieldFromDetail(key,label,efId){
   if(!confirm(`حذف الحقل "${label}" نهائياً؟ سيُخفى من شاشة المواطن وتُمسح قيمته الحالية. (نسخة تجريبية — لن يؤثر على باقي البرنامج)`))return;
-  if(efId){
-    extraFields=extraFields.filter(e=>e.id!==efId);
-    saveEF();
-    // حذف من fieldLayout بشكل صحيح
-    fieldLayout=fieldLayout.filter(f=>!(f.isExtra&&f.efId===efId));
-    saveFieldLayout();
-    citizens.forEach(c=>{if(c.extra&&(efId in c.extra))delete c.extra[efId];});
-    saveC();
-  }else{
-    const layout=getEffectiveLayout();
-    const f=layout.find(x=>x.key===key);
-    if(f){
-      const existing=fieldLayout.find(x=>x.key===key);
-      if(existing){existing.hidden=true;}
-      else{fieldLayout.push({...f,hidden:true});}
-      saveFieldLayout();
-    }
-    const c=citizens.find(x=>x.id===currentCitId);
-    if(c)c[key]='';
+  if(efId){ // حقل مخصّص ⟵ حذف نهائي
+    extraFields=extraFields.filter(e=>e.id!==efId); saveEF();
+    fieldLayout=fieldLayout.filter(f=>f.key!=='extra_'+efId); saveFieldLayout();
+    citizens.forEach(c=>{if(c.extra&&(efId in c.extra))delete c.extra[efId];}); saveC();
+  } else { // حقل افتراضي ⟵ إخفاء فقط
+    const eff=getEffectiveLayout();
+    if(eff.find(x=>x.key===key)){ fieldLayout=eff.map(x=>x.key===key?{...x,hidden:true}:x).map(_leanField); saveFieldLayout(); }
+    const c=citizens.find(x=>x.id===(_renderedCitId||currentCitId)); if(c)c[key]=''; saveC();
   }
-  saveFieldLayout();
-  saveC();
   notify('🗑️ تم حذف الحقل');
-  renderTabContent(currentTab,citizens.find(x=>x.id===currentCitId));
+  _refreshFieldsUI();
 }
 function esc(v){return(v||'').toString().replace(/"/g,'&quot;').replace(/</g,'&lt;');}
-function extraFieldHtml(f,c){
-  const e=extraFields.find(x=>x.id===f.efId)||{type:f.efType,options:f.efOpts,label:f.label};
-  const val=(c.extra||{})[f.efId]||'';
-  const ctrl=fieldCtrlButtons(f);
-  // أضف زر مسح مثل الحقول العادية
-  const clearBtn=`<span onclick="clearField('ef_${f.efId}')" title="مسح الحقل" style="cursor:pointer;font-size:10px;color:var(--text3);padding:1px 5px;border-radius:4px;border:1px solid var(--border);line-height:1.6;transition:all 0.15s" onmouseover="this.style.color='#E88080';this.style.borderColor='rgba(201,76,76,0.4)'" onmouseout="this.style.color='var(--text3)';this.style.borderColor='var(--border)'">✕ مسح</span>`;
-  const lbl=`<span style="flex:1">${esc(e.label||f.label)}</span><span style="display:flex;align-items:center;gap:6px;flex-shrink:0">${ctrl}${clearBtn}</span>`;
-  const labelHtml=`<label style="display:flex;justify-content:space-between;align-items:center;gap:6px">${lbl}</label>`;
-  if(e.type==='select')return fieldWrap(f,labelHtml+`<select id="ef_${f.efId}"><option value="">—</option>${(e.options||[]).map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}</select>`,false);
-  if(e.type==='combo')return fieldWrap(f,labelHtml+`<input type="text" id="ef_${f.efId}" value="${esc(val)}" placeholder="${esc(e.label||f.label)}" list="dl_${f.efId}" autocomplete="off"><datalist id="dl_${f.efId}">${(e.options||[]).map(o=>`<option value="${esc(o)}">`).join('')}</datalist>`,false);
-  if(e.type==='textarea')return fieldWrap(f,labelHtml+`<textarea id="ef_${f.efId}" rows="8" style="padding:9px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px;width:100%;resize:vertical;line-height:1.7;direction:rtl">${val}</textarea>`,true);
-  if(e.type==='today')return fieldWrap(f,labelHtml+`<input type="text" id="ef_${f.efId}" value="${esc(todayStr())}" readonly style="background:var(--navy3);cursor:default;color:var(--gold);font-weight:600">`,false);
-  if(e.type==='static')return fieldWrap(f,labelHtml+`<input type="text" id="ef_${f.efId}" value="${esc(e.staticValue||'')}" readonly style="background:var(--navy3);cursor:default;color:#88BBE8;font-weight:600">`,false);
-  return fieldWrap(f,labelHtml+`<input type="${e.type||'text'}" id="ef_${f.efId}" value="${esc(val)}" placeholder="${esc(e.label||f.label)}">`,false);
-}
+// (أُزيلت extraFieldHtml — جميع الحقول تُعرض الآن عبر renderField الموحّد)
+
 function renderTabContent(tab,c){
   const tc=document.getElementById('tabContent');
+  if(tc)_captureCitizenFields(); // ✅ التقط قيم التبويب الحالي قبل استبدال الشاشة حتى لا يضيع أي إدخال غير محفوظ
   const layout=getEffectiveLayout();
   
   // حفظ التبويب الحالي
   currentTab=tab;
   
-  if(tab==='personal'){
-    const fields=layout.filter(f=>f.tab==='personal'&&!f.hidden);
-    let fhtml='';
-    fields.forEach((f,idx)=>{  // ✅ أضفنا idx
-      if(f.isExtra){fhtml+=extraFieldHtml(f,c);return;}
-      if(f.type==='select')fhtml+=fs(f.key,f.label,c[f.key]||'',f.opts||[],f,idx);  // ✅ تمرير idx
-      else fhtml+=fi(f.key,f.label,c[f.key]||'',f.type||'text',f,idx);  // ✅ تمرير idx
-    });
-    tc.innerHTML=`<div class="form-section"><div class="form-section-title">👤 المعلومات الشخصية</div><div class="form-grid">${fhtml}</div></div>`;
+  if(tab==='personal'||tab==='address'||tab==='registry'||tab==='docs'||tab==='extra'){
+    const SECTION_TITLES={personal:'👤 المعلومات الشخصية',address:'🏠 / 📍 العنوان',registry:'📜 بيانات النفوس',docs:'🪪 / 🌍 الوثائق الرسمية والإقامة',extra:'➕ الحقول المخصصة'};
+    const fields=getEffectiveLayout().filter(f=>f.tab===tab&&!f.hidden);
+    const inner=fields.length
+      ? `<div class="form-grid">${fields.map(f=>renderField(f,c)).join('')}</div>`
+      : `<p style="color:var(--text3);font-size:12px">لا حقول ظاهرة هنا. أضِف حقلاً أو انقل حقولاً إلى هذا القسم من صفحة "🔀 ترتيب الحقول".</p>`;
+    tc.innerHTML=`<div class="form-section"><div class="form-section-title">${SECTION_TITLES[tab]}</div>${inner}</div>`;
+    activateFieldDragDrop();
   }
-  else if(tab==='address'){
-    const res=layout.filter(f=>f.tab==='address'&&!f.hidden);
-    let fhtml='';res.forEach((f,idx)=>{  // ✅ أضفنا idx
-      if(f.isExtra){fhtml+=extraFieldHtml(f,c);return;}
-      fhtml+=fi(f.key,f.label,c[f.key]||'',f.type||'text',f,idx);  // ✅ تمرير idx
-    });
-    tc.innerHTML=`<div class="form-section"><div class="form-section-title">🏠 / 📍 العنوان</div><div class="form-grid">${fhtml}</div></div>`;
-  }
-  else if(tab==='registry'){
-    const res=layout.filter(f=>f.tab==='registry'&&!f.hidden);
-    let fhtml='';
-    res.forEach((f,idx)=>{  // ✅ أضفنا idx
-      if(f.isExtra){fhtml+=extraFieldHtml(f,c);return;}
-      if(f.key==='notes')fhtml+=fieldWrap(f,`<label style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span style="flex:1">ملاحظات</span>${fieldCtrlButtons(f)}</label><textarea id="f_notes" rows="3" style="padding:9px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px;width:100%;resize:vertical">${c.notes||''}</textarea>`,true,idx);  // ✅ تمرير idx
-      else fhtml+=fi(f.key,f.label,c[f.key]||'',f.type||'text',f,idx);  // ✅ تمرير idx
-    });
-    tc.innerHTML=`<div class="form-section"><div class="form-section-title">📜 بيانات النفوس</div><div class="form-grid">${fhtml}</div></div>`;
-  }
-  else if(tab==='docs'){
-    const res=layout.filter(f=>f.tab==='docs'&&!f.hidden);
-    let fhtml='';res.forEach((f,idx)=>{  // ✅ أضفنا idx
-      if(f.isExtra){fhtml+=extraFieldHtml(f,c);return;}
-      fhtml+=fi(f.key,f.label,c[f.key]||'',f.type||'text',f,idx);  // ✅ تمرير idx
-    });
-    tc.innerHTML=`<div class="form-section"><div class="form-section-title">🪪 / 🌍 الوثائق الرسمية والإقامة</div><div class="form-grid">${fhtml}</div></div>`;
-  }
-  else if(tab==='extra'){
-    const res=layout.filter(f=>f.tab==='extra'&&!f.hidden);
-    tc.innerHTML=`<div class="form-section"><div class="form-section-title">➕ الحقول المخصصة</div>${res.length===0?'<p style="color:var(--text3);font-size:12px">لا حقول. أضفها من صفحة "ترتيب الحقول" بزر "+ حقل جديد".</p>':`<div class="form-grid">${res.map((f,idx)=>f.isExtra?extraFieldHtml(f,c):fi(f.key,f.label,c[f.key]||'',f.type||'text',f,idx)).join('')}</div>`}</div>`;  // ✅ تمرير idx
-  }
-  if(['personal','address','registry','docs','extra'].includes(tab))activateFieldDragDrop();
   else if(tab==='myforms'){
     tc.innerHTML=`<div class="form-section"><div class="form-section-title">📋 نماذجي</div>${forms.length===0?`<div class="empty-state" style="height:200px"><div class="e-icon">📋</div><p>لا نماذج. <a href="#" onclick="showPage('formbuilder')" style="color:var(--gold)">أنشئ نموذجاً</a></p></div>`:`<div class="form-card-grid">${forms.map(fm=>`<div class="form-card"><div class="form-card-title">📄 ${fm.name}</div><div class="form-card-meta">${fm.boxes.length} حقل · ${fm.hasImage?'مع صورة':'بدون صورة'}</div><div class="form-card-actions"><button class="btn btn-gold" onclick="previewForm('${fm.id}')" style="font-size:11px;padding:5px 10px">👁️ معاينة</button></div></div>`).join('')}</div>`}</div>`;
   }
@@ -4039,160 +4186,52 @@ function renderTabContent(tab,c){
   }
 }
 function activateFieldDragDrop(){
-  // ✅ نظام سحب وإفلات قوي وموثوق
-  const grids = document.querySelectorAll('#tabContent .form-grid');
-  
-  grids.forEach(grid => {
-    const fields = grid.querySelectorAll('.ft-draggable');
-    
-    fields.forEach(field => {
-      field.draggable = true;
-      
-      // dragstart - بدء السحب
-      field.addEventListener('dragstart', (e) => {
-        field.classList.add('dragging');  // ✅ إضافة class للتمييز
-        field.style.opacity = '0.5';
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/html', field.innerHTML);
-        
-        // حفظ العنصر المسحوب في المتغير العام
-        window.draggedElement = field;
-        console.log('🔴 dragstart: بدء السحب');
-      });
-      
-      // dragend - انتهاء السحب
-      field.addEventListener('dragend', (e) => {
-        field.classList.remove('dragging');
-        field.style.opacity = '1';
-        window.draggedElement = null;
-        
-        // إزالة المؤشرات من جميع الحقول
-        fields.forEach(f => {
-          f.style.borderTop = 'none';
-          f.style.borderBottom = 'none';
-          f.classList.remove('drag-over');
-        });
-        
-        // حفظ الترتيب الجديد
-        console.log('✅ dragend: حفظ الترتيب');
-        setTimeout(() => {
-          saveFieldOrderFromDOM();
-        }, 100);
-      });
-      
-      // dragover - السماح بالإفلات
-      field.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        
-        if (!window.draggedElement || window.draggedElement === field) {
-          return;
-        }
-        
-        // معرفة موضع الإدراج
-        const rect = field.getBoundingClientRect();
-        const parentRect = grid.getBoundingClientRect();
-        const afterElement = getDragAfterElement(grid, e.clientY);
-        
-        if (afterElement == null) {
-          grid.appendChild(window.draggedElement);
-        } else {
-          grid.insertBefore(window.draggedElement, afterElement);
-        }
-        
-        console.log('🟡 dragover');
-      });
-      
-      // dragenter - دخول العنصر
-      field.addEventListener('dragenter', (e) => {
-        if (window.draggedElement && window.draggedElement !== field) {
-          field.style.borderTop = '3px solid var(--gold)';
-          field.classList.add('drag-over');
-        }
-      });
-      
-      // dragleave - مغادرة العنصر
-      field.addEventListener('dragleave', (e) => {
-        field.style.borderTop = 'none';
-        field.classList.remove('drag-over');
-      });
-      
-      // drop - الإفلات
-      field.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        if (window.draggedElement && window.draggedElement !== field) {
-          grid.insertBefore(window.draggedElement, field);
-          console.log('💚 drop: تم الإفلات');
-        }
-      });
-    });
-    
-    // السماح بالإفلات على الـ grid نفسه
-    grid.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-    });
-    
-    grid.addEventListener('drop', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    });
+  // سحب داخل كل قسم على حدة في الصفحة الواحدة (وضع الترتيب فقط)
+  document.querySelectorAll('#citForm .form-grid').forEach(function(grid){
+    grid._sortableOn=false;
+    attachSortable(grid, '.ft-draggable', '.sort-handle', function(){ saveFieldOrderFromDOM(); _refreshFieldsUI(); });
   });
 }
-
-// ✅ دالة مساعدة لتحديد موضع الإدراج
-function getDragAfterElement(container, y) {
-  const draggableElements = [...container.querySelectorAll('.ft-draggable:not(.dragging)')];
-  
-  return draggableElements.reduce((closest, child) => {
-    const box = child.getBoundingClientRect();
-    const offset = y - box.top - box.height / 2;
-    
-    if (offset < 0 && offset > closest.offset) {
-      return { offset: offset, element: child };
-    } else {
-      return closest;
-    }
-  }, { offset: Number.NEGATIVE_INFINITY }).element;
-}
-function saveFieldOrderFromDOM(){
-  // يقرأ الترتيب الحالي الظاهر في DOM لهذا التبويب فقط، ويحدّث fieldLayout بنفس الترتيب
-  const tab=currentTab;
-  const layout=getEffectiveLayout();
-  const visibleKeysInOrder=Array.from(document.querySelectorAll('#tabContent .ft-draggable')).map(el=>el.dataset.key);
-  if(!visibleKeysInOrder.length)return;
-  
-  console.log(`💾 حفظ ترتيب ${tab}:`, visibleKeysInOrder);
-  
-  const hiddenOfTab=layout.filter(f=>f.tab===tab&&f.hidden);
-  const newTabOrder=[...visibleKeysInOrder.map(k=>layout.find(f=>f.key===k)).filter(Boolean),...hiddenOfTab];
-  
-  // حذف الحقول القديمة للتبويب من fieldLayout
-  fieldLayout=fieldLayout.filter(f=>f.tab!==tab);
-  
-  // أضف الحقول الجديدة مع التأكد من أن tab محدثة بشكل صحيح
-  newTabOrder.forEach(f=>{
-    const newField = {...f};
-    newField.tab = tab;  // تأكد من أن tab صحيحة (خاصة للحقول الإضافية)
-    fieldLayout.push(newField);
-  });
-  
-  console.log(`✅ تم حفظ ترتيب ${tab}:`, fieldLayout.filter(f=>f.tab===tab).map(f=>f.key));
-  
+function reorderSectionByKeys(keys){
+  if(!keys||!keys.length)return;
+  const eff=getEffectiveLayout();
+  const byKey={}; eff.forEach(f=>byKey[f.key]=f);
+  const first=byKey[keys[0]]; if(!first)return;
+  const tab=first.tab; // قسم هذا الصندوق
+  const seq=keys.map(k=>byKey[k]).filter(f=>f&&f.tab===tab);
+  eff.forEach(f=>{ if(f.tab===tab && !seq.includes(f)) seq.push(f); }); // المخفية بنهاية القسم
+  let i=0;
+  fieldLayout=eff.map(f=> f.tab===tab ? seq[i++] : f).map(_leanField);
   saveFieldLayout();
 }
+function saveFieldOrderFromDOM(){
+  // يعيد ترتيب كل قسم وفق ترتيب عناصره الظاهرة في صندوقه — دون لمس بقية الأقسام
+  document.querySelectorAll('#citForm .form-grid').forEach(function(grid){
+    const keys=Array.from(grid.querySelectorAll('.ft-draggable')).map(el=>el.dataset.key).filter(Boolean);
+    reorderSectionByKeys(keys);
+  });
+}
+// يلتقط قيم كل الحقول الظاهرة (أياً كان قسمها أو نوعها) ويكتبها في كائن المواطن المعروض.
+// يُستدعى قبل أي إعادة بناء وعند الحفظ، فلا يضيع أي إدخال غير محفوظ.
+function _captureCitizenFields(){
+  const cid=_renderedCitId||currentCitId; // اكتب دائماً للمواطن المعروض فعلاً على الشاشة
+  const c=citizens.find(x=>x.id===cid); if(!c)return null;
+  if(!c.extra)c.extra={};
+  getEffectiveLayout().forEach(f=>{
+    if(f.type==='today'||f.type==='static')return; // قيم تلقائية/ثابتة لا تُخزَّن
+    const el=document.getElementById(fieldElId(f));
+    if(!el)return; // غير ظاهر الآن ⟵ تُترك قيمته كما هي
+    if(f.isExtra)c.extra[f.efId]=el.value; else c[f.key]=el.value;
+  });
+  return c;
+}
 function saveCitizen(){
-  const c=citizens.find(x=>x.id===currentCitId);if(!c)return;
-  const fields=['firstName','fatherName','lastName','motherName','motherLast','dob','birthPlace','gender','nationality','nationalityOther','marital','spouseName','children','phone','religion','job','governorate','district','town','street','building','floor','regGov','regDist','regTown','regNeighborhood','registryNum','registrationId','registryDate','registryOffice','notes','nationalId','idDate','idExpiry','passport','passportDate','passportExp','driveLicense','licenseExp','residentId','residentExp','statelessDoc','refugeeNum'];
-  fields.forEach(f=>{const el=document.getElementById('f_'+f);if(el)c[f]=el.value;});
-  const extra=c.extra||{};
-  extraFields.forEach(ef=>{const el=document.getElementById('ef_'+ef.id);if(el)extra[ef.id]=el.value;});
-  c.extra=extra;
-  const idx=citizens.findIndex(x=>x.id===currentCitId);
+  const c=_captureCitizenFields();if(!c)return;
+  c.updatedAt=Date.now(); // ✅ طابع زمني ليعمل الدمج الذكي ويفوز آخر حفظ عند تحرير نفس الملف من جهازين
+  const idx=citizens.findIndex(x=>x.id===c.id);
   if(idx!==-1)citizens[idx]=c;
   saveC();renderSideList();notify('✅ تم حفظ البيانات');
+  _setSaveStatus&&_setSaveStatus('saved');
   // لا تستدعى renderCitizenDetail() لتجنب إعادة تحميل ترتيب الخانات
 }
 function deleteCit(id){
@@ -4467,19 +4506,18 @@ function saveQuickField(){
   const opts=(type==='select'||type==='combo')?(document.getElementById('qfOpts').value||'').split(',').map(s=>s.trim()).filter(Boolean):[];
   const fieldId='ef_'+Date.now();
   
-  // أضف إلى extraFields
-  extraFields.push({id:fieldId,label:name,type,options:opts});
+  // أضف التعريف إلى extraFields (مصدر التعريف الوحيد للحقول المخصّصة)
+  extraFields.push({id:fieldId,label:name,type,options:opts,staticValue:''});
   saveEF();
   
-  // أضف إلى fieldLayout أيضاً
-  fieldLayout.push({key:'extra_'+fieldId,label:name,tab:'extra',isExtra:true,efId:fieldId,efType:type,efOpts:opts,hidden:false});
+  // أضف إدخالاً نحيفاً إلى التخطيط (الترتيب/القسم/الإظهار/العرض فقط)
+  fieldLayout.push({key:'extra_'+fieldId,tab:'extra',hidden:false,full:(type==='textarea')});
   saveFieldLayout();
   
   closeModal('quickFieldModal');
   notify('✅ تمت إضافة الحقل: '+name);
-  // Re-render the extra tab
-  if(currentTab==='extra') swTab('extra', document.querySelector('.tab.active'));
-  if(currentPage==='fieldmanager') renderFieldManagerPage();
+  // أعد عرض الحقول
+  _refreshFieldsUI();
 }
 function renderExtraFieldsPage(){
   const mp=document.getElementById('mainPanel');
@@ -4504,7 +4542,7 @@ function renderExtraFieldsPage(){
     efHtml='<p style="color:var(--text3);font-size:13px">لا حقول مخصصة بعد.</p>';
   } else {
     extraFieldsInOrder.forEach(function(f){
-      const e = extraFields.find(x=>x.id===f.efId) || {label:f.label,type:f.efType,options:f.efOpts,staticValue:''};
+      const e = extraFields.find(x=>x.id===f.efId) || {id:f.efId, label:f.label, type:f.type, options:f.options, staticValue:f.staticValue||''};
       const typeLabel=e.type==='today'?'📅 تاريخ اليوم تلقائي':e.type==='static'?'📌 نص ثابت: '+(e.staticValue||''):e.type;
       const opts=e.options&&e.options.length?' · '+e.options.join(' / '):'';
       efHtml+='<div class="ef-card"><div class="ef-name">'+e.label+'</div><div class="ef-type">'+typeLabel+opts+'</div><button class="btn btn-red" onclick="delEF(\''+e.id+'\')" style="font-size:11px;padding:4px 10px">🗑️</button></div>';
@@ -4578,12 +4616,12 @@ function addEF(){
   if(type==='static'&&!staticValue){notify('❌ أدخل النص الثابت','red');return;}
   const fieldId='ef_'+Date.now();
   
-  // أضف إلى extraFields
+  // أضف التعريف إلى extraFields (مصدر التعريف الوحيد)
   extraFields.push({id:fieldId,label:name,type,options:opts,staticValue});
   saveEF();
   
-  // أضف إلى fieldLayout أيضاً
-  fieldLayout.push({key:'extra_'+fieldId,label:name,tab:'extra',isExtra:true,efId:fieldId,efType:type,efOpts:opts,hidden:false});
+  // أضف إدخالاً نحيفاً إلى التخطيط
+  fieldLayout.push({key:'extra_'+fieldId,tab:'extra',hidden:false,full:(type==='textarea')});
   saveFieldLayout();
   
   renderExtraFieldsPage();
@@ -4593,9 +4631,10 @@ function delEF(id){
   if(!confirm('حذف هذا الحقل؟'))return;
   extraFields=extraFields.filter(e=>e.id!==id);
   saveEF();
-  // حذف من fieldLayout أيضاً
-  fieldLayout=fieldLayout.filter(f=>!(f.isExtra&&f.efId===id));
+  fieldLayout=fieldLayout.filter(f=>f.key!=='extra_'+id); // حذف بالمفتاح
   saveFieldLayout();
+  citizens.forEach(c=>{if(c.extra&&(id in c.extra))delete c.extra[id];}); // امسح القيمة من المواطنين
+  saveC();
   renderExtraFieldsPage();
 }
 
@@ -6665,11 +6704,13 @@ function openAddModal(){document.getElementById('addModal').style.display='block
 function closeModal(id){
   document.getElementById(id).style.display='none';
   if(id==='stampModal'){const gs=document.getElementById('stGroupSel');if(gs)gs.disabled=false;const is=document.getElementById('stItemSel');if(is)is.disabled=false;}
+  try{if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();}catch(_e){}
+  _fbApplyPendingRefresh(); // ✅ طبّق أي تحديث مؤجَّل من الزملاء بعد إغلاق النافذة
 }
 function addCitizen(){
   const first=document.getElementById('nFirst').value.trim();
   if(!first){notify('❌ أدخل الاسم الأول','red');return;}
-  const c={id:Date.now().toString(),firstName:first,fatherName:document.getElementById('nFather').value.trim(),lastName:document.getElementById('nLast').value.trim(),registryNum:document.getElementById('nReg').value.trim(),nationality:document.getElementById('nNat').value,extra:{}};
+  const c={id:Date.now().toString(),firstName:first,fatherName:document.getElementById('nFather').value.trim(),lastName:document.getElementById('nLast').value.trim(),registryNum:document.getElementById('nReg').value.trim(),nationality:document.getElementById('nNat').value,extra:{},createdAt:Date.now(),updatedAt:Date.now()};
   citizens.unshift(c);saveC();closeModal('addModal');renderSideList();selectCitizen(c.id);notify('✅ تمت الإضافة');
 }
 
