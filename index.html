@@ -5104,9 +5104,38 @@ function printTextForm(id,citId){
 }
 
 
+// ════════ الحقول اليدوية: تُملأ عند كل طباعة (لا تُخزَّن على المواطن) ════════
+let _manualValues={};      // { manual_key : القيمة المكتوبة }
+let _manualPending=null;   // { fid, txnId } بانتظار المتابعة بعد الملء
+function _manualLabelClean(l){ return (l||'').replace(/^\s*✍️\s*/,''); }
 function previewFormPrompt(fid,txnId){
   if(!currentCitId){notify('⚠️ اختر مواطناً أولاً من القائمة','warn');return;}
+  const fm=forms.find(function(f){return f.id===fid;});
+  const manualBoxes=(fm&&fm.boxes)?fm.boxes.filter(function(b){return b.key&&b.key.indexOf('manual_')===0;}):[];
+  if(manualBoxes.length){ _openManualFill(fid,txnId,manualBoxes); return; } // املأ الحقول اليدوية أولاً
+  _manualValues={};
   _openReqModalForForm(fid,txnId);
+}
+function _openManualFill(fid,txnId,manualBoxes){
+  _manualPending={fid:fid,txnId:txnId};
+  _manualValues={};
+  const list=document.getElementById('manualFillList');
+  if(!list){ _openReqModalForForm(fid,txnId); return; }
+  list.innerHTML=manualBoxes.map(function(b){
+    const lbl=esc(_manualLabelClean(b.label||'حقل'));
+    return '<div class="form-field" style="margin-bottom:10px"><label>'+lbl+'</label>'
+      +'<input type="text" data-mk="'+esc(b.key)+'" placeholder="اكتب '+lbl+'..." style="width:100%;padding:9px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Cairo,sans-serif;font-size:14px;direction:rtl" onkeydown="if(event.key===\'Enter\'){event.preventDefault();confirmManualFill();}"></div>';
+  }).join('');
+  document.getElementById('manualFillModal').style.display='block';
+  setTimeout(function(){const f=list.querySelector('input');if(f)f.focus();},120);
+}
+function confirmManualFill(){
+  const list=document.getElementById('manualFillList');
+  _manualValues={};
+  if(list){ list.querySelectorAll('input[data-mk]').forEach(function(inp){ _manualValues[inp.getAttribute('data-mk')]=(inp.value||'').trim(); }); }
+  closeModal('manualFillModal');
+  const p=_manualPending; _manualPending=null;
+  if(p)_openReqModalForForm(p.fid,p.txnId);
 }
 function _openReqModalForForm(fid,txnId){
   const el=document.getElementById('printNoteModal'); if(!el){previewForm(fid,txnId);return;}
@@ -5127,6 +5156,7 @@ function previewForm(fid,txnId,req){
   const _txn=txnId?transactions.find(function(t){return t.id===txnId;}):transactions.filter(function(t){return t.citId===c.id;}).sort(function(a,b){return b.serial-a.serial;})[0]||null;
   const reqText=_requestPlainText(req);
   const getData = (key) => {
+    if(key.indexOf('manual_')===0) return _manualValues[key]||''; // ✍️ قيمة كُتبت عند الطباعة
     // الرقم التسلسلي يُعالج في txnNote block أعلاه
     if (key.startsWith('extra_')){
       const efId=key.replace('extra_','');
@@ -5451,6 +5481,9 @@ function renderFormBuilderPage(){
       <!-- LEFT: Field palette -->
       <div style="width:190px;flex-shrink:0;background:var(--navy2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden">
         <div style="padding:10px 12px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--gold3);letter-spacing:1px">الحقول المتاحة</div>
+        <div style="padding:8px 10px;border-bottom:1px solid var(--border)">
+          <button onclick="fbAddManualField()" title="حقل لا تُخزَّن قيمته — تُكتب عند كل طباعة. مناسب لوثيقة الولادة/الوفاة (اسم الطفل، تاريخ الولادة...)" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px;padding:9px;background:rgba(76,139,201,0.12);border:1px dashed rgba(76,139,201,0.5);border-radius:8px;color:#88BBE8;font-family:'Cairo',sans-serif;font-size:11.5px;font-weight:700;cursor:pointer">✍️ حقل يدوي (يُكتب عند الطباعة)</button>
+        </div>
         <div id="fbFieldPal" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:3px">
           ${allF.map(f=>`<div class="fb-pal-item" onclick="fbAddField('${f.key}','${f.label.replace(/'/g,"\\'")}')">
             <span style="font-size:14px">${fbFieldIcon(f.key)}</span>
@@ -5655,6 +5688,24 @@ function fbAddTextFormField(tfId,tfName){
   updateFbBoxes();
 }
 
+function fbAddManualField(){
+  const canvas=document.getElementById('fbCanvas');
+  if(!canvas||canvas.style.display==='none'){notify('⚠️ ارفع صورة الوثيقة أولاً','warn');return;}
+  const label=(prompt('اسم الحقل اليدوي (يظهر كسؤال عند الطباعة):\nمثال: اسم الطفل ، تاريخ الولادة ، اسم الأم')||'').trim();
+  if(!label)return;
+  const fs=parseInt(document.getElementById('fb_fontSize')?.value||'16');
+  const fw=document.getElementById('fb_fontWeight')?.value||'700';
+  const tc=document.getElementById('fb_textColor')?.value||'#000000';
+  const bg=document.getElementById('fb_bgColor')?.value||'#ffffff';
+  const n=canvas.querySelectorAll('.fb-textbox').length;
+  const key='manual_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+  const box=makeFbBox(key,'✍️ '+label,10+n%4*140,10+Math.floor(n/4)*48,140,fs+10,fs,fw,tc,bg);
+  makeDraggable2(box,updateFbBoxes);
+  canvas.appendChild(box);
+  fbSelectBox(box);
+  updateFbBoxes();
+}
+
 function makeFbBox(key,label,x,y,w,h,fs,fw,tc,bg,wrap){
   fw=fw||'700'; tc=tc||'#000000'; bg=bg||'#ffffff';
   const box=document.createElement('div');
@@ -5812,6 +5863,7 @@ function previewFormBuild(){
   const name=document.getElementById('fb_name').value.trim()||'معاينة النموذج';
   const _noBg=!!(document.getElementById('fb_noBgPrint')||{}).checked;
   function getPreviewData(key){
+    if(key&&key.indexOf('manual_')===0){ const mb=fbBoxes.find(function(x){return x.key===key;}); return '['+_manualLabelClean(mb&&mb.label||'يدوي')+']'; }
     if(key==='serialNumber') return formatSerial(nextSerial());
     if(key==='txnNote') return '[ ملاحظات المعاملة تظهر عند الطباعة ]';
     if(key==='__request__') return '[ المعاملات المطلوبة تظهر عند الطباعة ]';
@@ -7353,6 +7405,21 @@ function pickForm(i){
       <div id="formPickerList" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;margin-bottom:16px"></div>
       <div class="modal-actions">
         <button class="btn btn-outline" onclick="closeModal('formPickerModal')">إغلاق</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Manual fields fill (filled at print time, e.g. birth/death document) -->
+<div id="manualFillModal" style="display:none">
+  <div class="modal-overlay">
+    <div class="modal-box" style="width:460px;max-width:94vw;max-height:88vh;overflow-y:auto">
+      <div class="modal-title">✍️ تعبئة الحقول اليدوية</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:14px">اكتب القيم الخاصة بهذه الوثيقة (مثل اسم الطفل وتاريخ الولادة). لا تُحفَظ — تُطبَع مرة واحدة فقط.</div>
+      <div id="manualFillList" style="margin-bottom:6px"></div>
+      <div class="modal-actions" style="margin-top:10px">
+        <button class="btn btn-gold" onclick="confirmManualFill()" style="flex:1;justify-content:center;font-size:14px;padding:11px">متابعة للطباعة ←</button>
+        <button class="btn btn-outline" onclick="closeModal('manualFillModal')">إلغاء</button>
       </div>
     </div>
   </div>
