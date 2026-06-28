@@ -1708,6 +1708,7 @@ function loadAll(){
   loadPerms();
   try{const _v=localStorage.getItem(AGK);if(_v)agents=JSON.parse(_v);}catch(_e){}
   try{const _v=localStorage.getItem(CTK);if(_v)compoundTxns=JSON.parse(_v);}catch(_e){}
+  _initKnownIds(); // ✅ خط الأساس لكشف الحذف لاحقاً
 }
 // ════════ FIREBASE FUNCTIONS (Firestore) ════════
 // تجميع الحفظ (debounce): بدل إرسال طلب كتابة كامل لكل تعديل صغير،
@@ -1727,15 +1728,69 @@ var _fbClientId=(function(){
     return v;
   }catch(_e){return 'c_'+Date.now()+'_'+Math.random().toString(36).slice(2,10);}
 })();
+// ════════ نظام "شواهد الحذف" (Tombstones) — يمنع رجوع العناصر المحذوفة ════════
+// المشكلة: المزامنة تَدمج القائمة المحلية مع البعيدة (اتحاد حسب id). فلو حذف
+// مستخدمٌ عنصراً وبقي موجوداً عند جهاز زميله، يُعاد رفعه فيرجع للجميع.
+// الحل: عند الحذف لا نكتفي بإزالته، بل نُسجّل (id + وقت الحذف) في خريطة _delMap
+// تُرافق كل مستند في Firestore، وعند الدمج نُسقط أي عنصر شاهدُ حذفه أحدث من تعديله.
+// كل هذا مركزيّ هنا في طبقة المزامنة — دون تغيير أيّ دالة حذف أو أيّ عرض.
+var DELK='__deletions';
+var _delMap={};
+try{var _dmRaw=localStorage.getItem(DELK);if(_dmRaw)_delMap=JSON.parse(_dmRaw)||{};}catch(_e){_delMap={};}
+var _fbKnownIds={};
+var _DEL_TTL=1000*60*60*24*180; // تُقلَّم شواهد الحذف الأقدم من 180 يوماً
+function _persistDelMap(){
+  try{
+    var now=Date.now(),pruned={};
+    Object.keys(_delMap).forEach(function(id){ if(now-_delMap[id]<_DEL_TTL)pruned[id]=_delMap[id]; });
+    _delMap=pruned;
+    localStorage.setItem(DELK,JSON.stringify(_delMap));
+  }catch(_e){}
+}
+function _mergeDels(dels){
+  if(!dels||typeof dels!=='object')return;
+  try{ Object.keys(dels).forEach(function(id){ var t=+dels[id]||0; if(t>(_delMap[id]||0))_delMap[id]=t; }); _persistDelMap(); }catch(_e){}
+}
+function _itemTime(it){ try{return new Date(it.updatedAt||it.createdAt||0).getTime()||0;}catch(_e){return 0;} }
+function _dropDeleted(list){
+  if(!_delMap||!list||!list.length)return list;
+  return list.filter(function(it){ if(!it||!it.id)return true; var d=_delMap[it.id]; if(!d)return true; return _itemTime(it)>d; });
+}
+function _liveArrForKey(key){
+  switch(key){
+    case SK:return citizens; case EK:return extraFields; case FK:return forms; case TFK:return textForms;
+    case TK:return transactions; case DK:return debts; case STK:return stamps; case CK:return cashEntries;
+    case SVCK:return serviceTypes; case SGK:return stampGroups; case AGK:return agents; case CTK:return compoundTxns;
+    default:return null;
+  }
+}
+function _setKnownIds(key,arr){ try{ var m={}; (arr||[]).forEach(function(it){ if(it&&it.id)m[it.id]=1; }); _fbKnownIds[key]=m; }catch(_e){} }
+function _initKnownIds(){ [SK,EK,FK,TFK,TK,DK,STK,CK,SVCK,SGK,AGK,CTK].forEach(function(k){ _setKnownIds(k,_liveArrForKey(k)); }); }
+// كشف الحذف مركزياً: أي id كان معروفاً بآخر حفظ واختفى الآن ⇒ نُسجّله شاهدَ حذف
+function _recordDeletions(key,data){
+  if(key===DELK)return;
+  try{
+    if(!Array.isArray(data)){_fbKnownIds[key]={};return;}
+    var prev=_fbKnownIds[key], now={}, i;
+    for(i=0;i<data.length;i++){ if(data[i]&&data[i].id)now[data[i].id]=1; }
+    if(prev){
+      var t=Date.now(),found=false;
+      Object.keys(prev).forEach(function(id){ if(!now[id]){_delMap[id]=t;found=true;} });
+      if(found)_persistDelMap();
+    }
+    _fbKnownIds[key]=now;
+  }catch(_e){}
+}
 function _fbSet(key,data){
   if(!window._fbReady||!window._fbDb)return;
+  _recordDeletions(key,data); // ✅ سجّل أي عنصر اختفى عن آخر حفظ كشاهد حذف
   _fbPending[key]=data;
   if(_fbTimers[key])clearTimeout(_fbTimers[key]);
   _fbTimers[key]=setTimeout(function(){
     var payload=_fbPending[key];
     delete _fbPending[key];
     delete _fbTimers[key];
-    window._fbDb.collection('mxt').doc(key).set({data:payload,ts:Date.now(),by:_fbClientId})
+    window._fbDb.collection('mxt').doc(key).set({data:payload,dels:_delMap,ts:Date.now(),by:_fbClientId})
       .catch(function(e){console.warn('firestore set err',key,e.message);});
   },800);
 }
@@ -1747,7 +1802,7 @@ function _fbFlush(){
     delete _fbPending[key];
     delete _fbTimers[key];
     if(window._fbReady&&window._fbDb){
-      window._fbDb.collection('mxt').doc(key).set({data:payload,ts:Date.now(),by:_fbClientId})
+      window._fbDb.collection('mxt').doc(key).set({data:payload,dels:_delMap,ts:Date.now(),by:_fbClientId})
         .catch(function(e){console.warn('firestore flush err',key,e.message);});
     }
   });
@@ -1758,7 +1813,8 @@ function _fbSetBatch(obj){
   try{
     var batch=window._fbDb.batch();
     Object.keys(obj).forEach(function(k){
-      batch.set(window._fbDb.collection('mxt').doc(k),{data:obj[k],ts:Date.now(),by:_fbClientId});
+      _recordDeletions(k,obj[k]);
+      batch.set(window._fbDb.collection('mxt').doc(k),{data:obj[k],dels:_delMap,ts:Date.now(),by:_fbClientId});
     });
     batch.commit().catch(function(e){console.warn('batch err',e.message);});
   }catch(e){}
@@ -1851,7 +1907,7 @@ function _fbApplyKey(key,value){
         }
       }
     });
-    return Array.from(merged.values());
+    return _dropDeleted(Array.from(merged.values())); // ✅ أسقط ما شاهدُ حذفه أحدث من تعديله
   }
   // ✅ استخدم دمج ذكي بدلاً من الاستبدال الكامل
   if(key===SK&&arr(value)){citizens=smartMergeData(citizens,arr(value));localStorage.setItem(SK,JSON.stringify(citizens));return true;}
@@ -1895,6 +1951,8 @@ function _fbUserIsBusy(){
       if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return true;} // المستخدم يكتب الآن
     if(window._sortActive)return true; // عملية سحب/ترتيب حقل جارية
     if(currentPage==='citizen_detail')return true; // داخل ملف مواطن مفتوح للتحرير
+    // 🔧 داخل منشئ النماذج وفيه عمل غير محفوظ — لا تُعِد البناء فتمسح ما يضعه المستخدم
+    if(currentPage==='formbuilder' && (editingFormId || (typeof fbImg!=='undefined'&&fbImg) || (typeof fbBoxes!=='undefined'&&fbBoxes&&fbBoxes.length))) return true;
   }catch(_e){}
   return false;
 }
@@ -1931,7 +1989,9 @@ function _fbStartLiveSync(){
       var dd=doc.data();
       if(!dd||dd.data===undefined)return;
       if(dd.by===_fbClientId)return; // تعديلنا نحن، تجاهل الصدى
+      if(dd.dels)_mergeDels(dd.dels);          // ✅ استورد شواهد الحذف قبل الدمج
       var changed=_fbApplyKey(key,dd.data);
+      _setKnownIds(key,_liveArrForKey(key));    // ✅ حدّث قائمة "المعروف" بعد الدمج ليُكتَشَف الحذف لاحقاً
       if(changed){
         notify(_fbUserIsBusy()?'☁️ وصل تحديث من زميل — سيظهر بعد أن تُنهي عملك الحالي':'☁️ تحديث جديد من زميل آخر');
         _fbScheduleRerender();
@@ -1958,10 +2018,11 @@ function _fbSyncDown(){
   var keys=[SK,EK,FK,TFK,TK,DK,STK,CK,SVCK,SGK,WAK,AGK,PKK,UKK,FLK];
 
   function applyDocs(docs){
+    docs.forEach(function(doc){ if(doc&&doc.exists){var dd=doc.data(); if(dd&&dd.dels)_mergeDels(dd.dels);} }); // ✅ مرحلة 1: اجمع كل شواهد الحذف
     docs.forEach(function(doc,i){
       if(doc&&doc.exists){
         var dd=doc.data();
-        if(dd&&dd.data!==undefined)_fbApplyKey(keys[i],dd.data);
+        if(dd&&dd.data!==undefined){_fbApplyKey(keys[i],dd.data);_setKnownIds(keys[i],_liveArrForKey(keys[i]));}
       }
     });
     _fbStatus('on');
@@ -5087,6 +5148,8 @@ function previewForm(fid,txnId,req){
   if(!w){notify('⚠️ المتصفح حجب فتح نافذة الطباعة — اسمح بالنوافذ المنبثقة','warn');return;}
   if(fm.image){
     const fmImageSrc=resolveImg(fm.image); // ✅ حل المرجع من IDB
+    // 🖨️ وضع "البيانات فقط": تبقى الصورة ظاهرة على الشاشة لتحديد الأماكن، وتُخفى عند الطباعة فقط (visibility كي يبقى المقاس ثابتاً والحقول بمكانها)
+    const _noBgCss=fm.noBgPrint?'@media print{.wrap img{visibility:hidden!important}}':'';
     const boxesHTML=fm.boxes.map(b=>{
       if(b.key&&b.key.startsWith('textform_')){
         const tf=textForms.find(t=>t.id===b.key.slice(9));
@@ -5098,7 +5161,7 @@ function previewForm(fid,txnId,req){
       }
       return `<div class="pf-box" data-fs="${b.fs||fs}" style="position:absolute;left:${b.xPct}%;top:${b.yPct}%;width:${b.wPct}%;min-height:${b.hPct}%;padding:1px 5px;font-size:${b.fs||fs}px;font-weight:${b.fw||'700'};color:${b.tc||'#111'};background:${b.bg&&b.bg!=='transparent'&&b.bg!=='#ffffff'?b.bg:'transparent'};font-family:Arial,sans-serif;white-space:nowrap;overflow:visible;direction:rtl;display:flex;align-items:center">${getData(b.key)}</div>`;
     }).join('');
-    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title> </title><style>@page{size:auto;margin:0}html,body{margin:0;padding:0}body{direction:rtl;font-family:Arial}.wrap{position:relative;display:block;width:100%}.wrap img{width:100%;display:block}</style></head><body><div class="wrap"><img id="pfimg" src="${fmImageSrc}">${boxesHTML}</div><script>(function(){var img=document.getElementById('pfimg');function go(){var W=img.offsetWidth||img.naturalWidth||1;var D=${(fm.imgW||0)}||W;var sc=D>0?(W/D):1;var bx=document.querySelectorAll('.pf-box[data-fs]');for(var i=0;i<bx.length;i++){var f=parseFloat(bx[i].getAttribute('data-fs'))||12;bx[i].style.fontSize=(f*sc)+'px';}setTimeout(function(){try{window.print();}catch(e){}},300);}if(img.complete&&img.naturalWidth>0){go();}else{img.onload=go;img.onerror=function(){setTimeout(function(){try{window.print();}catch(e){}},300);};}})();<\/script></body></html>`);
+    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title> </title><style>@page{size:auto;margin:0}html,body{margin:0;padding:0}body{direction:rtl;font-family:Arial}.wrap{position:relative;display:block;width:100%}.wrap img{width:100%;display:block}${_noBgCss}</style></head><body><div class="wrap"><img id="pfimg" src="${fmImageSrc}">${boxesHTML}</div><script>(function(){var img=document.getElementById('pfimg');function go(){var W=img.offsetWidth||img.naturalWidth||1;var D=${(fm.imgW||0)}||W;var sc=D>0?(W/D):1;var bx=document.querySelectorAll('.pf-box[data-fs]');for(var i=0;i<bx.length;i++){var f=parseFloat(bx[i].getAttribute('data-fs'))||12;bx[i].style.fontSize=(f*sc)+'px';}setTimeout(function(){try{window.print();}catch(e){}},300);}if(img.complete&&img.naturalWidth>0){go();}else{img.onload=go;img.onerror=function(){setTimeout(function(){try{window.print();}catch(e){}},300);};}})();<\/script></body></html>`);
   }else{
     const rows=fm.boxes.map(b=>{
       const _v=(b.key==='__request__')?esc(reqText):getData(b.key);
@@ -5161,6 +5224,10 @@ function loadFormIntoBuilder(fid){
   const fsValEl=document.getElementById('fb_fontSizeVal');
   if(fsEl)fsEl.value=fs;
   if(fsValEl)fsValEl.textContent=fs;
+
+  // استرجاع وضع "طباعة البيانات فقط"
+  const nbpEl=document.getElementById('fb_noBgPrint');
+  if(nbpEl)nbpEl.checked=!!fm.noBgPrint;
 
   // Load image & boxes into canvas
   const canvas=document.getElementById('fbCanvas');
@@ -5253,7 +5320,7 @@ function saveEditedFormFromBuilder(){
   if(fbBoxes.length===0){notify('⚠️ لا حقول على النموذج','warn');return;}
   const name=document.getElementById('fb_name')?.value.trim()||forms[idx].name;
   const fontSize=parseInt(document.getElementById('fb_fontSize')?.value)||currentFontSize||16;
-  forms[idx]={...forms[idx],name,boxes:fbBoxes,image:fbImg,hasImage:!!fbImg,fontSize,imgW:((document.querySelector('#fbCanvas img')||{}).offsetWidth)||forms[idx].imgW||null};
+  forms[idx]={...forms[idx],name,boxes:fbBoxes,image:fbImg,hasImage:!!fbImg,fontSize,noBgPrint:!!(document.getElementById('fb_noBgPrint')||{}).checked,imgW:((document.querySelector('#fbCanvas img')||{}).offsetWidth)||forms[idx].imgW||null};
   saveForms();
   editingFormId=null;
   const saveBtn=document.querySelector('[onclick="saveEditedFormFromBuilder()"]');
@@ -5428,6 +5495,10 @@ function renderFormBuilderPage(){
           <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);cursor:pointer">
             <input type="checkbox" id="fb_snap" checked onchange="_fbSnap=this.checked" style="accent-color:var(--gold)">
             محاذاة الشبكة
+          </label>
+          <label title="عند الطباعة تظهر البيانات فقط بدون صورة الخلفية — للورقة الرسمية المطبوعة مسبقاً (مثل ورقة الباركود). الصورة تبقى ظاهرة على الشاشة لتحديد أماكن الحقول فقط." style="display:flex;align-items:center;gap:4px;font-size:11px;color:#88BBE8;cursor:pointer;background:rgba(76,139,201,0.1);padding:5px 9px;border:1px solid rgba(76,139,201,0.3);border-radius:7px">
+            <input type="checkbox" id="fb_noBgPrint" style="accent-color:#88BBE8">
+            🖨️ اطبع البيانات فقط (بدون الخلفية)
           </label>
           <div style="display:flex;align-items:center;gap:6px">
             <span style="font-size:11px;color:var(--text3)">تكبير:</span>
@@ -5739,6 +5810,7 @@ function previewFormBuild(){
   const citizen=citizens.length>0?citizens[0]:null;
   const fs=parseInt(document.getElementById('fb_fontSize').value)||16;
   const name=document.getElementById('fb_name').value.trim()||'معاينة النموذج';
+  const _noBg=!!(document.getElementById('fb_noBgPrint')||{}).checked;
   function getPreviewData(key){
     if(key==='serialNumber') return formatSerial(nextSerial());
     if(key==='txnNote') return '[ ملاحظات المعاملة تظهر عند الطباعة ]';
@@ -5764,14 +5836,14 @@ function previewFormBuild(){
       return '<div style="position:absolute;left:'+b.xPct+'%;top:'+b.yPct+'%;width:'+b.wPct+'%;min-height:'+b.hPct+'%;padding:1px 5px;font-size:'+(b.fs||fs)+'px;font-weight:'+(b.fw||'700')+';color:'+(b.tc||'#111')+';background:'+(b.bg&&b.bg!=='transparent'&&b.bg!=='#ffffff'?b.bg:'transparent')+';font-family:Arial,sans-serif;white-space:nowrap;overflow:visible;direction:rtl;display:flex;align-items:center">'+getPreviewData(b.key)+'</div>';
     }).join('');
     w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>معاينة: '+name+'</title>'
-      +'<style>body{margin:20px;direction:rtl;font-family:Arial}@media print{.noprint{display:none}}</style></head><body>'
+      +'<style>body{margin:20px;direction:rtl;font-family:Arial}@media print{.noprint{display:none}'+(_noBg?'.bgimg{visibility:hidden!important}':'')+'}</style></head><body>'
       +'<div class="noprint" style="margin-bottom:14px;padding:10px 16px;background:#1C2A45;border-radius:8px;display:flex;align-items:center;gap:10px">'
       +'<span style="color:#C9A84C;font-weight:700;font-size:14px">👁️ معاينة — '+name+'</span>'
       +'<span style="color:#9BA8BC;font-size:12px">هذه معاينة قبل الحفظ</span>'
       +'<button onclick="window.print()" style="margin-right:auto;padding:7px 16px;background:#C9A84C;color:#111;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:700">🖨️ طباعة</button>'
       +'<button onclick="window.close()" style="padding:7px 14px;border:1px solid #ccc;border-radius:6px;cursor:pointer;background:transparent;color:#fff">إغلاق</button>'
       +'</div>'
-      +'<div style="position:relative;display:inline-block;width:100%"><img src="'+fbImg+'" style="width:100%;display:block">'+boxesHTML+'</div>'
+      +'<div style="position:relative;display:inline-block;width:100%"><img class="bgimg" src="'+fbImg+'" style="width:100%;display:block">'+boxesHTML+'</div>'
       +'</body></html>');
   } else {
     const rows=fbBoxes.map(function(b){
@@ -5799,7 +5871,7 @@ function saveFormBuild(){
   if(fbBoxes.length===0){notify('⚠️ أضف حقولاً أولاً','warn');return;}
   const name=document.getElementById('fb_name').value.trim()||'نموذج '+(forms.length+1);
   const fontSize=parseInt(document.getElementById('fb_fontSize').value)||16;
-  forms.push({id:'f_'+Date.now(),name,boxes:fbBoxes,image:fbImg,hasImage:!!fbImg,fontSize,reg:activeReg,imgW:((document.querySelector('#fbCanvas img')||{}).offsetWidth)||null});
+  forms.push({id:'f_'+Date.now(),name,boxes:fbBoxes,image:fbImg,hasImage:!!fbImg,fontSize,reg:activeReg,noBgPrint:!!(document.getElementById('fb_noBgPrint')||{}).checked,imgW:((document.querySelector('#fbCanvas img')||{}).offsetWidth)||null});
   saveForms();notify('✅ تم حفظ النموذج: '+name);showPage('forms',document.querySelectorAll('.nav-item')[4]);
 }
 
