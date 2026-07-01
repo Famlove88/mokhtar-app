@@ -705,6 +705,7 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
           <div class="nav-item" data-page="transactions" onclick="showPage('transactions',this)"><span class="ico">📑</span> المعاملات <span class="badge-count" id="navTxnCount" style="background:#4CAF7A">0</span></div>
           <div class="nav-item" data-page="forms" onclick="showPage('forms',this)"><span class="ico">📋</span> النماذج</div>
           <div class="nav-item" data-page="textforms" onclick="showPage('textforms',this)"><span class="ico">📃</span> نماذج نصية</div>
+          <div class="nav-item" data-page="affidavits" onclick="showPage('affidavits',this)"><span class="ico">📜</span> الإفادات</div>
           <div class="nav-item" data-page="formbuilder" onclick="showPage('formbuilder',this)"><span class="ico">🔧</span> بناء نموذج</div>
           <div class="nav-item" data-page="extrafields" onclick="showPage('extrafields',this)"><span class="ico">➕</span> حقول مخصصة</div>
           <div class="nav-item" data-page="fieldmanager" onclick="showPage('fieldmanager',this)"><span class="ico">🔀</span> ترتيب الحقول</div>
@@ -1083,6 +1084,57 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
   </div>
 </div>
 
+<!-- قالب إفادة (إنشاء/تعديل) -->
+<div id="affTmplModal" style="display:none">
+  <div class="modal-overlay">
+    <div class="modal-box" style="width:600px;max-width:95vw;max-height:92vh;overflow-y:auto">
+      <div class="modal-title" id="affTmplModalTitle">➕ قالب إفادة جديد</div>
+      <div class="form-field" style="margin-bottom:10px"><label>اسم القالب</label><input type="text" id="affTmplName" placeholder="مثلاً: شهادة سكن" style="width:100%;padding:9px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px"></div>
+      <div style="background:rgba(224,164,76,0.08);border:1px solid rgba(224,164,76,0.25);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:11.5px;color:var(--text2);line-height:1.7">💡 اكتب النص الثابت، وحيث تريد فراغاً اضغط أحد الأزرار أدناه لإدراج الحقل بالصيغة الصحيحة تلقائياً — دون كتابة الأقواس بنفسك.</div>
+      <div style="background:var(--navy2);border:1px solid var(--border);border-radius:9px;padding:10px;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--gold3);margin-bottom:7px">➕ إدراج حقل عند مؤشّر الكتابة</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--text3);align-self:center">مجموعة شخص كاملة:</span>
+          <button type="button" class="btn btn-outline" onclick="affInsertPerson(1)" style="font-size:11px;padding:4px 10px">👤 الشخص الأول</button>
+          <button type="button" class="btn btn-outline" onclick="affInsertPerson(2)" style="font-size:11px;padding:4px 10px">👤 الشخص الثاني</button>
+          <button type="button" class="btn btn-outline" onclick="affInsertPerson(3)" style="font-size:11px;padding:4px 10px">👤 الثالث</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:11px;color:var(--text3)">حقل مفرد:</span>
+          <select id="affInsPerson" style="padding:5px 8px;background:var(--navy3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Cairo',sans-serif;font-size:11px">
+            <option value="0">عام</option><option value="1">الشخص ١</option><option value="2">الشخص ٢</option><option value="3">الشخص ٣</option>
+          </select>
+          <input type="text" id="affInsName" placeholder="اسم الحقل (مثلاً: رقم العقار)" style="flex:1;min-width:140px;padding:5px 9px;background:var(--navy3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px" onkeydown="if(event.key==='Enter'){event.preventDefault();affInsertField();}">
+          <button type="button" class="btn btn-gold" onclick="affInsertField()" style="font-size:11px;padding:5px 12px">➕ إدراج</button>
+        </div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px">
+          <span style="font-size:10.5px;color:var(--text3);align-self:center">شائعة:</span>
+          ${['اسم','والدة','تولد','سجل','خانة','رقم_وطني'].map(f=>`<button type="button" onclick="affQuickField('${f}')" style="font-size:10.5px;padding:3px 8px;background:var(--navy3);border:1px solid var(--border);border-radius:12px;color:var(--text2);cursor:pointer">${f.replace(/_/g,' ')}</button>`).join('')}
+        </div>
+      </div>
+      <div class="form-field"><label>نص القالب</label><textarea id="affTmplBody" rows="11" oninput="affUpdateFieldPreview()" placeholder="اكتب النص هنا، واضغط أزرار الإدراج أعلاه لوضع الحقول..." style="width:100%;padding:11px 12px;background:var(--navy3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:14px;line-height:2;resize:vertical;direction:rtl"></textarea></div>
+      <div id="affFieldPreview" style="margin-top:8px;font-size:11px;color:var(--text3);min-height:18px"></div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button class="btn btn-gold" onclick="saveAffidavitTemplate()" style="flex:1;justify-content:center;font-size:14px;padding:10px">✓ حفظ القالب</button>
+        <button class="btn btn-outline" onclick="closeModal('affTmplModal')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- إنشاء / عرض إفادة -->
+<div id="affFillModal" style="display:none">
+  <div class="modal-overlay">
+    <div class="modal-box" style="width:640px;max-width:95vw;max-height:92vh;overflow-y:auto">
+      <div class="modal-title" id="affFillTitle">📝 إنشاء إفادة</div>
+      <div id="affFillBody"></div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button class="btn btn-outline" onclick="closeModal('affFillModal')" style="flex:1;justify-content:center">إغلاق</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Quick field adder modal -->
 <div id="quickFieldModal" style="display:none">
   <div class="modal-overlay">
@@ -1227,7 +1279,7 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
 
 <script>
 // ===== STATE =====
-let citizens=[],extraFields=[],forms=[],textForms=[],transactions=[],debts=[],stamps=[],cashEntries=[],serviceTypes=[],stampCategories=[],stampGroups=[],waTemplates=[],agents=[],compoundTxns=[];
+let citizens=[],extraFields=[],forms=[],textForms=[],transactions=[],debts=[],stamps=[],cashEntries=[],serviceTypes=[],stampCategories=[],stampGroups=[],waTemplates=[],agents=[],compoundTxns=[],affidavits=[];
 // ═══════════════════════════════════════════════════════════════
 //  نظام الملفات حسب الجنسية (لبناني / سوري / فلسطيني)
 //  قائمة واحدة + فلترة، وكل ملف له حقوله ونماذجه وحقل عنوانه الخاص.
@@ -1309,13 +1361,13 @@ async function wipeAllData(){
   // 3) IndexedDB — صور المواطنين
   try{ indexedDB.deleteDatabase('MokhtarImages'); }catch(e){}
   // 4) أفرغ الذاكرة الحالية لتفادي إعادة الرفع قبل إعادة التحميل
-  try{ citizens=[];extraFields=[];forms=[];textForms=[];transactions=[];debts=[];stamps=[];cashEntries=[];serviceTypes=[];stampCategories=[];stampGroups=[];waTemplates=[];fieldLayout=[];agents=[];compoundTxns=[];userPerms={};extraUsers={}; }catch(e){}
+  try{ citizens=[];extraFields=[];forms=[];textForms=[];transactions=[];debts=[];stamps=[];cashEntries=[];serviceTypes=[];stampCategories=[];stampGroups=[];waTemplates=[];fieldLayout=[];agents=[];compoundTxns=[];affidavits=[];userPerms={};extraUsers={}; }catch(e){}
   notify('🗑️ تم حذف كل البيانات — جارٍ إعادة التحميل');
   setTimeout(function(){ try{location.reload();}catch(_e){} }, 1000);
 }
 function exportAllData(){
   const data={_app:'mokhtar',_ver:'files-v1',_date:new Date().toISOString(),
-    citizens,extraFields,fieldLayout,forms,textForms,transactions,debts,stamps,cashEntries,serviceTypes,stampCategories,stampGroups,waTemplates,agents,compoundTxns};
+    citizens,extraFields,fieldLayout,forms,textForms,transactions,debts,stamps,cashEntries,serviceTypes,stampCategories,stampGroups,waTemplates,agents,compoundTxns,affidavits};
   try{
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
@@ -1333,7 +1385,7 @@ function importAllData(input){
   r.onload=function(){
     try{
       const d=JSON.parse(r.result);
-      const keys=['citizens','extraFields','fieldLayout','forms','textForms','transactions','debts','stamps','cashEntries','serviceTypes','stampCategories','stampGroups','waTemplates','agents','compoundTxns'];
+      const keys=['citizens','extraFields','fieldLayout','forms','textForms','transactions','debts','stamps','cashEntries','serviceTypes','stampCategories','stampGroups','waTemplates','agents','compoundTxns','affidavits'];
       keys.forEach(k=>{ if(Array.isArray(d[k])) window[k]=d[k]; });
       try{saveC();saveEF();saveFieldLayout();saveForms();saveTextForms();}catch(_e){}
       try{if(typeof saveAll==='function')saveAll();}catch(_e){}
@@ -1354,7 +1406,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1';
+const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 const SERIAL_START=26112;
 // permissions & users
 let userPerms={};   // {username: {page:bool,...}}
@@ -1795,6 +1847,7 @@ function loadAll(){
   loadPerms();
   try{const _v=localStorage.getItem(AGK);if(_v)agents=JSON.parse(_v);}catch(_e){}
   try{const _v=localStorage.getItem(CTK);if(_v)compoundTxns=JSON.parse(_v);}catch(_e){}
+  try{const _v=localStorage.getItem(AFK);if(_v)affidavits=JSON.parse(_v);}catch(_e){}
   _initKnownIds(); // ✅ خط الأساس لكشف الحذف لاحقاً
 }
 // ════════ FIREBASE FUNCTIONS (Firestore) ════════
@@ -1847,7 +1900,7 @@ function _liveArrForKey(key){
   switch(key){
     case SK:return citizens; case EK:return extraFields; case FK:return forms; case TFK:return textForms;
     case TK:return transactions; case DK:return debts; case STK:return stamps; case CK:return cashEntries;
-    case SVCK:return serviceTypes; case SGK:return stampGroups; case AGK:return agents; case CTK:return compoundTxns;
+    case SVCK:return serviceTypes; case SGK:return stampGroups; case AGK:return agents; case CTK:return compoundTxns; case AFK:return affidavits;
     default:return null;
   }
 }
@@ -2013,6 +2066,7 @@ function _fbApplyKey(key,value){
   if(key===UKK&&value&&typeof value==='object'){extraUsers=value;localStorage.setItem(UKK,JSON.stringify(extraUsers));return true;}
   if(key===FLK&&arr(value)){fieldLayout=arr(value);migrateAndNormalizeFields();return true;} // ✅ استعادة من Firebase ثم توحيد
   if(key===CTK&&arr(value)){compoundTxns=smartMergeData(compoundTxns,arr(value));localStorage.setItem(CTK,JSON.stringify(compoundTxns));return true;}
+  if(key===AFK&&arr(value)){affidavits=smartMergeData(affidavits,arr(value));localStorage.setItem(AFK,JSON.stringify(affidavits));return true;}
   return false;
 }
 // ════════ المزامنة اللحظية (Realtime) ════════
@@ -2218,6 +2272,7 @@ function saveFieldLayout(){
 }
 function saveAgents(){try{localStorage.setItem(AGK,JSON.stringify(agents));}catch(e){} if(window._fbReady)_fbSet(AGK,agents);}
 function saveCompoundTxns(){try{localStorage.setItem(CTK,JSON.stringify(compoundTxns));}catch(e){} if(window._fbReady)_fbSet(CTK,compoundTxns);}
+function saveAffidavits(){try{localStorage.setItem(AFK,JSON.stringify(affidavits));}catch(e){} if(window._fbReady)_fbSet(AFK,affidavits);}
 function loadFieldLayout(){
   try{
     const v=localStorage.getItem(FLK);
@@ -2415,6 +2470,7 @@ function showPage(page,navEl){
   else if(page==='broadcast')renderBroadcastPage();
   else if(page==='agents')renderAgentsPage();
   else if(page==='compound')renderCompoundPage();
+  else if(page==='affidavits')renderAffidavitsPage();
   else if(page==='agent_detail')renderAgentDetail();
   else if(page==='permissions')renderPermissionsPage();
   else if(page==='cashbox')renderCashboxPage();
@@ -2706,6 +2762,253 @@ let _ctxnItems=[]; // temp items while building
 
 function nextCSerial(){ return _nextSerialUnified(); }
 
+// ═══════════════ مولّد الإفادات (قوالب نصية + تعبئة + طباعة) ═══════════════
+const AFFIDAVIT_SAMPLES=[
+ {name:'شهادة سكن / إقامة على عقار', body:'حضر أمامي السيد {ش1_اسم}، والدته {ش1_والدة}، تولد {ش1_تولد}، سجل {ش1_سجل}، وبعد التحقق من هويته وصفته، أفاد بأنه مالك / مستفيد / أحد ورثة العقار رقم {رقم_العقار} الكائن ضمن منطقة {المنطقة_العقارية} العقارية.\n\nوصرّح، وهو بكامل أهليته القانونية وتحت مسؤوليته الشخصية، بأن السيد {ش2_اسم}، والدته {ش2_والدة}، تولد {ش2_تولد}، من التابعية {ش2_التابعية}، سجل {ش2_سجل}، ويحمل هوية / جواز سفر / إقامة رقم {ش2_رقم_الهوية}، يقيم ويسكن بصورة فعلية على العقار المذكور أعلاه، والمؤلف من {مؤلف_العقار}، وذلك بعلمه وموافقته.\n\nويتحمل المصرّح كامل المسؤولية القانونية عن صحة هذا التصريح وجميع البيانات الواردة فيه.'},
+ {name:'إفادة نقل أثاث إلى سوريا', body:'أنا الموقع أدناه {ش1_اسم}، والدتي {ش1_والدة}، مواليد {ش1_تولد}، خانة {ش1_خانة}، رقم وطني {ش1_رقم_وطني}، تاريخ إصدار {ش1_تاريخ_الإصدار}، حيث كنت أسكن في بلدة برالياس، وقد حضرت أمام مختار برالياس وأنا بصدد نقل أثاث منزلي المستعمل إلى سوريا {الوجهة}، وهو عبارة عن:\n1- {بند_1}\n2- {بند_2}\n3- {بند_3}\n4- {بند_4}\n5- {بند_5}\n\nوحضر أمامي {ش2_اسم}\nرقم هاتف صاحب العلاقة: {هاتف_صاحب_العلاقة}\nاسم السائق: {اسم_السائق}\nرقم هاتف السائق: {هاتف_السائق}\nنوع السيارة: {نوع_السيارة}\n\nوأصادق على صحة التوقيع.'}
+];
+function _affFields(text){ const set=[]; const re=/\{([^{}]+)\}/g; let m; while((m=re.exec(text||''))!==null){ const f=m[1].trim(); if(f&&set.indexOf(f)===-1)set.push(f); } return set; }
+function _affBuild(body,values){ return (body||'').replace(/\{([^{}]+)\}/g,function(_,tok){ const v=(values[tok.trim()]||'').trim(); return v||' '; }); }
+// تجميع حقول الأشخاص: {ش1_اسم} → الشخص الأول ، والباقي معلومات عامة
+function _affPersonGroup(token){ const m=(token||'').match(/^ش(\d+)_(.+)$/); if(m)return {person:parseInt(m[1],10),label:m[2]}; return {person:null,label:token}; }
+function _affRenderFields(){
+  const groups={}, general=[];
+  _affFillTokens.forEach((tok,i)=>{ const g=_affPersonGroup(tok); if(g.person){ (groups[g.person]=groups[g.person]||[]).push({i:i,label:g.label}); } else { general.push({i:i,label:g.label}); } });
+  const pName=n=>({1:'الأول',2:'الثاني',3:'الثالث',4:'الرابع',5:'الخامس'}[n]||n);
+  const fld=f=>`<div class="form-field"><label>${esc(f.label.replace(/_/g,' '))}</label><input type="text" id="aff_f_${f.i}" style="width:100%;padding:8px 10px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px"></div>`;
+  let html='';
+  Object.keys(groups).map(Number).sort((a,b)=>a-b).forEach(n=>{
+    html+=`<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:700;color:#E0A44C;margin-bottom:7px;padding:6px 10px;background:rgba(224,164,76,0.1);border-radius:6px">👤 الشخص ${pName(n)}</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${groups[n].map(fld).join('')}</div></div>`;
+  });
+  if(general.length){
+    html+=`<div style="margin-bottom:12px">${Object.keys(groups).length?`<div style="font-size:12px;font-weight:700;color:var(--gold3);margin-bottom:7px;padding:6px 10px;background:var(--navy3);border-radius:6px">📄 معلومات عامة</div>`:''}<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${general.map(fld).join('')}</div></div>`;
+  }
+  return html||'<div style="grid-column:1/-1;font-size:12px;color:var(--text3);text-align:center;padding:10px">لا حقول — هذا القالب نص ثابت</div>';
+}
+function loadAffidavitSamples(){ AFFIDAVIT_SAMPLES.forEach((s,i)=>{ affidavits.push({id:'aff_'+Date.now()+'_'+i,type:'tmpl',name:s.name,body:s.body,at:Date.now()}); }); saveAffidavits(); notify('✅ حُمّل قالبان تجريبيان'); renderAffidavitsPage(); }
+function renderAffidavitsPage(){
+  const mp=document.getElementById('mainPanel');
+  const tmpls=affidavits.filter(a=>a.type==='tmpl');
+  const recs=affidavits.filter(a=>a.type==='rec').sort((a,b)=>(b.at||0)-(a.at||0));
+  mp.innerHTML=`
+    <div class="page-head" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div><h2 class="page-title">📜 الإفادات</h2><div class="page-sub">${tmpls.length} قالب · ${recs.length} إفادة منشأة</div></div>
+      <button class="btn btn-gold" onclick="openAffidavitTemplate()">+ قالب جديد</button>
+    </div>
+    <div style="padding:0 24px 24px">
+      <div style="font-size:13px;font-weight:700;color:var(--gold3);margin:14px 0 10px">📋 قوالب الإفادات</div>
+      ${tmpls.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+        ${tmpls.map(tm=>{const flds=_affFields(tm.body);return `
+        <div class="recent-card" style="padding:14px">
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">${esc(tm.name)}</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;line-height:1.6;max-height:52px;overflow:hidden">${esc((tm.body||'').slice(0,90))}…</div>
+          <div style="font-size:10px;color:var(--gold3);margin-bottom:10px">${flds.length} حقل للتعبئة</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn btn-gold" onclick="openAffidavitFill('${tm.id}')" style="font-size:11px;padding:5px 10px">📝 إنشاء إفادة</button>
+            <button class="btn btn-outline" onclick="openAffidavitTemplate('${tm.id}')" style="font-size:11px;padding:5px 10px">✏️</button>
+            <button class="btn btn-red" onclick="deleteAffidavitTemplate('${tm.id}')" style="font-size:11px;padding:5px 8px">🗑️</button>
+          </div>
+        </div>`;}).join('')}
+      </div>`:`<div style="text-align:center;padding:24px;background:var(--navy2);border:1px dashed var(--border);border-radius:12px">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:12px">لا قوالب بعد. اكتب قالبك الأول، أو حمّل قالبين تجريبيين للتجربة.</div>
+        <button class="btn btn-outline" onclick="loadAffidavitSamples()">📥 تحميل قالبين تجريبيين (سكن + نقل أثاث)</button>
+      </div>`}
+      ${recs.length?`<div style="font-size:13px;font-weight:700;color:var(--gold3);margin:22px 0 10px">🗂️ الإفادات المنشأة (الأرشيف)</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${recs.map(r=>`<div style="display:flex;align-items:center;gap:10px;background:var(--navy2);border:1px solid var(--border);border-radius:9px;padding:10px 12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:160px">
+            <div style="font-size:12.5px;font-weight:700;color:var(--text)">${esc(r.tmplName||'إفادة')}</div>
+            <div style="font-size:10.5px;color:var(--text3);margin-top:2px">📅 ${r.date||''}</div>
+          </div>
+          <button class="btn btn-outline" onclick="openAffidavitView('${r.id}')" style="font-size:11px;padding:5px 10px">👁️ عرض / طباعة</button>
+          <button class="btn btn-red" onclick="deleteAffidavitRecord('${r.id}')" style="font-size:11px;padding:5px 8px">🗑️</button>
+        </div>`).join('')}
+      </div>`:''}
+    </div>
+  `;
+}
+let _affTmplEditId=null;
+// إدراج نص عند مؤشّر الكتابة داخل مربّع القالب
+function _affInsertAtCursor(text){
+  const ta=document.getElementById('affTmplBody'); if(!ta)return;
+  const s=ta.selectionStart||0, e=ta.selectionEnd||0, v=ta.value;
+  ta.value=v.slice(0,s)+text+v.slice(e);
+  const pos=s+text.length; ta.focus(); ta.setSelectionRange(pos,pos);
+  affUpdateFieldPreview();
+}
+function _affTok(person,label){ const clean=(label||'').trim().replace(/\s+/g,'_'); return '{'+(person&&+person>0?('ش'+person+'_'):'')+clean+'}'; }
+function affInsertField(){
+  const p=(document.getElementById('affInsPerson')||{}).value||'0';
+  const name=(document.getElementById('affInsName')||{}).value||'';
+  if(!name.trim()){notify('اكتب اسم الحقل أولاً','warn');return;}
+  _affInsertAtCursor(_affTok(p,name));
+  const ni=document.getElementById('affInsName'); if(ni)ni.value='';
+}
+function affQuickField(name){ const p=(document.getElementById('affInsPerson')||{}).value||'0'; _affInsertAtCursor(_affTok(p,name)); }
+// إدراج مجموعة حقول شخص كاملة دفعة واحدة
+function affInsertPerson(n){ _affInsertAtCursor('السيد '+_affTok(n,'اسم')+'، والدته '+_affTok(n,'والدة')+'، تولد '+_affTok(n,'تولد')+'، سجل '+_affTok(n,'سجل')+'، '); }
+// معاينة حيّة للحقول المكتشفة
+function affUpdateFieldPreview(){
+  const el=document.getElementById('affFieldPreview'); if(!el)return;
+  const body=(document.getElementById('affTmplBody')||{}).value||'';
+  const flds=_affFields(body);
+  if(!flds.length){ el.innerHTML='<span style="color:var(--text3)">لا حقول بعد — اكتب النص وأدرج الحقول.</span>'; return; }
+  const chip=t=>`<span style="display:inline-block;background:rgba(224,164,76,0.12);border:1px solid rgba(224,164,76,0.3);color:#E0A44C;border-radius:10px;padding:1px 8px;margin:2px;font-size:10.5px;direction:rtl">${esc(t.replace(/^ش(\d+)_/,'ش$1: ').replace(/_/g,' '))}</span>`;
+  el.innerHTML=`<div style="font-weight:700;color:var(--gold3);margin-bottom:3px">✓ ${flds.length} حقل مكتشف:</div>${flds.map(chip).join('')}`;
+}
+function openAffidavitTemplate(id){
+  _affTmplEditId=id||null;
+  const tm=id?affidavits.find(a=>a.id===id&&a.type==='tmpl'):null;
+  document.getElementById('affTmplName').value=tm?tm.name:'';
+  document.getElementById('affTmplBody').value=tm?tm.body:'';
+  document.getElementById('affTmplModalTitle').textContent=tm?'✏️ تعديل قالب':'➕ قالب إفادة جديد';
+  const _ip=document.getElementById('affInsPerson'); if(_ip)_ip.value='0';
+  const _in=document.getElementById('affInsName'); if(_in)_in.value='';
+  affUpdateFieldPreview();
+  document.getElementById('affTmplModal').style.display='block';
+}
+function saveAffidavitTemplate(){
+  const name=document.getElementById('affTmplName').value.trim();
+  const body=document.getElementById('affTmplBody').value;
+  if(!name){notify('❌ أدخل اسم القالب','red');return;}
+  if(!body.trim()){notify('❌ أدخل نص القالب','red');return;}
+  if(_affTmplEditId){ const tm=affidavits.find(a=>a.id===_affTmplEditId&&a.type==='tmpl'); if(tm){ tm.name=name; tm.body=body; } }
+  else { affidavits.push({id:'aff_'+Date.now(),type:'tmpl',name:name,body:body,at:Date.now()}); }
+  saveAffidavits(); closeModal('affTmplModal'); notify('✅ حُفظ القالب'); renderAffidavitsPage();
+}
+function deleteAffidavitTemplate(id){ if(!confirm('حذف هذا القالب؟'))return; const i=affidavits.findIndex(a=>a.id===id); if(i>-1)affidavits.splice(i,1); saveAffidavits(); renderAffidavitsPage(); }
+function deleteAffidavitRecord(id){ if(!confirm('حذف هذه الإفادة من الأرشيف؟'))return; const i=affidavits.findIndex(a=>a.id===id); if(i>-1)affidavits.splice(i,1); saveAffidavits(); renderAffidavitsPage(); }
+let _affFillTmplId=null,_affFillTokens=[];
+function openAffidavitFill(id){
+  const tm=affidavits.find(a=>a.id===id&&a.type==='tmpl'); if(!tm)return;
+  _affFillTmplId=id; _affFillTokens=_affFields(tm.body);
+  _affBgSettings={formId:tm.bgFormId||'',top:tm.bgTop!=null?tm.bgTop:27,side:tm.bgSide!=null?tm.bgSide:9,font:tm.bgFont!=null?tm.bgFont:15,line:tm.bgLine!=null?tm.bgLine:1.9};
+  const formOpts=forms.filter(f=>f.image).map(f=>`<option value="${f.id}" ${_affBgSettings.formId===f.id?'selected':''}>${esc(f.name||'نموذج')}</option>`).join('');
+  const numInp='width:100%;padding:5px;background:var(--navy2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;text-align:center';
+  document.getElementById('affFillTitle').textContent='📝 '+tm.name;
+  document.getElementById('affFillBody').innerHTML=`
+    <div>
+      ${_affRenderFields()}
+    </div>
+    <button class="btn btn-gold" onclick="_affBuildPreview()" style="width:100%;justify-content:center;margin-top:12px">🔧 بناء نص الإفادة</button>
+    <div id="affPreviewWrap" style="display:none;margin-top:14px">
+      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:6px">النص النهائي (يمكنك تعديله قبل الطباعة):</label>
+      <textarea id="affPreviewText" oninput="_affBgPreview()" rows="10" style="width:100%;padding:12px;background:var(--navy3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:14px;line-height:2;resize:vertical;direction:rtl"></textarea>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn btn-outline" onclick="printAffidavitText()" style="flex:1;justify-content:center">🖨️ طباعة نص فقط</button>
+        <button class="btn btn-outline" onclick="saveAffidavitRecord()" style="flex:1;justify-content:center">💾 حفظ بالأرشيف</button>
+      </div>
+      <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--gold3);margin-bottom:8px">📄 الطباعة فوق نموذج (الخلفية + النص معاً)</div>
+        <div class="form-field" style="margin-bottom:8px">
+          <label>اختر النموذج (الخلفية)</label>
+          <select onchange="_affBgSet('formId',this.value)" style="width:100%;padding:8px 10px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px;direction:rtl">
+            <option value="">— بدون نموذج (نص فقط) —</option>${formOpts}
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+          <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">من الأعلى %</label><input type="number" value="${_affBgSettings.top}" oninput="_affBgSet('top',this.value)" style="${numInp}"></div>
+          <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">هامش الجانب %</label><input type="number" value="${_affBgSettings.side}" oninput="_affBgSet('side',this.value)" style="${numInp}"></div>
+          <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">حجم الخط</label><input type="number" value="${_affBgSettings.font}" oninput="_affBgSet('font',this.value)" style="${numInp}"></div>
+          <div><label style="font-size:10px;color:var(--text3);display:block;margin-bottom:2px">تباعد الأسطر</label><input type="number" step="0.1" value="${_affBgSettings.line}" oninput="_affBgSet('line',this.value)" style="${numInp}"></div>
+        </div>
+        <div id="affBgPreview" style="margin-bottom:10px"></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-gold" onclick="printAffidavitOnForm()" style="flex:1;justify-content:center;font-size:13px">🖨️ طباعة فوق النموذج</button>
+          <button class="btn btn-outline" onclick="_affSaveBgSettings()" style="font-size:12px">💾 حفظ الإعدادات</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('affFillModal').style.display='block';
+}
+function _affApplyCitizen(){
+  const id=document.getElementById('affCitPick').value; if(!id)return;
+  const c=citizens.find(x=>x.id===id); if(!c)return;
+  const nm=citName(c)||'';
+  _affFillTokens.forEach((tok,i)=>{
+    const el=document.getElementById('aff_f_'+i); if(!el||el.value)return; // لا نطمس ما كُتب
+    const g=_affPersonGroup(tok); const label=g.label.replace(/_/g,' ');
+    if(/^(اسم|الاسم)$/.test(label)&&nm&&g.person===1){ el.value=nm; }              // اسم الشخص الأول
+    else if(/هاتف|تلفون/.test(label)&&c.phone){ el.value=c.phone; }
+    else if(/^(سجل|رقم السجل|خانة)$/.test(label)&&(c.registryNum||(c.extra&&c.extra.registryNum))){ el.value=c.registryNum||c.extra.registryNum; }
+  });
+  notify('✅ عُبّئ الاسم من ملف المواطن (أكمل الباقي كتابةً)');
+}
+function _affCollectValues(){ const vals={}; _affFillTokens.forEach((tok,i)=>{ const el=document.getElementById('aff_f_'+i); vals[tok]=el?el.value:''; }); return vals; }
+function _affBuildPreview(){
+  const tm=affidavits.find(a=>a.id===_affFillTmplId&&a.type==='tmpl'); if(!tm)return;
+  document.getElementById('affPreviewText').value=_affBuild(tm.body,_affCollectValues());
+  document.getElementById('affPreviewWrap').style.display='';
+  _affBgPreview(); // حدّث المعاينة فوق النموذج إن كان مختاراً
+}
+function printAffidavitText(){
+  const txt=(document.getElementById('affPreviewText')?document.getElementById('affPreviewText').value:'')||'';
+  const w=window.open('','_blank'); if(!w){notify('اسمح بالنوافذ المنبثقة للطباعة','warn');return;}
+  w.document.write('<html dir="rtl"><head><meta charset="utf-8"><title>إفادة</title><style>'+
+    '@page{size:A4;margin:60mm 20mm 25mm 20mm;}'+
+    'body{font-family:Cairo,\'Segoe UI\',Tahoma,sans-serif;font-size:15px;line-height:2.1;color:#000;text-align:justify;direction:rtl;margin:0;padding:0;}'+
+    '.txt{white-space:pre-wrap;}@media print{button{display:none;}}'+
+    '</style></head><body><div class="txt">'+txt.replace(/</g,'&lt;')+'</div>'+
+    '<scr'+'ipt>setTimeout(function(){window.print();},250);</scr'+'ipt></body></html>');
+  w.document.close();
+}
+// ─── الدمج فوق خلفية النموذج ───
+let _affBgSettings={formId:'',top:27,side:9,font:15,line:1.9};
+function _affBgSet(key,val){ _affBgSettings[key]= (key==='formId')?val:(parseFloat(val)||0); _affBgPreview(); }
+function _affBgPreview(){
+  const wrap=document.getElementById('affBgPreview'); if(!wrap)return;
+  const s=_affBgSettings;
+  if(!s.formId){ wrap.innerHTML='<div style="text-align:center;color:var(--text3);font-size:12px;padding:20px">اختر نموذجاً من القائمة لعرض المعاينة والطباعة فوقه</div>'; return; }
+  const fm=forms.find(f=>f.id===s.formId);
+  if(!fm||!fm.image){ wrap.innerHTML='<div style="text-align:center;color:#E88080;font-size:12px;padding:20px">هذا النموذج لا يحتوي صورة خلفية</div>'; return; }
+  const src=resolveImg(fm.image);
+  const text=(document.getElementById('affPreviewText')||{}).value||'';
+  wrap.innerHTML=`<div style="position:relative;width:100%;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:#fff">
+    <img id="affBgImg" src="${src}" style="width:100%;display:block">
+    <div id="affBgTxt" style="position:absolute;top:${s.top}%;right:${s.side}%;width:${100-2*s.side}%;text-align:justify;direction:rtl;white-space:pre-wrap;font-family:'Cairo',sans-serif;color:#111;line-height:${s.line};font-size:12px">${esc(text)}</div>
+  </div>`;
+  const img=document.getElementById('affBgImg');
+  const scale=function(){ const W=img.offsetWidth||1, D=fm.imgW||W, sc=D>0?(W/D):1; const t=document.getElementById('affBgTxt'); if(t)t.style.fontSize=((s.font)*sc)+'px'; };
+  if(img.complete&&img.naturalWidth>0)scale(); else img.onload=scale;
+}
+function printAffidavitOnForm(){
+  const s=_affBgSettings;
+  if(!s.formId){notify('اختر نموذجاً أولاً','warn');return;}
+  const fm=forms.find(f=>f.id===s.formId);
+  if(!fm||!fm.image){notify('النموذج بلا صورة','red');return;}
+  const src=resolveImg(fm.image);
+  const text=(document.getElementById('affPreviewText')||{}).value||'';
+  const w=window.open('','_blank'); if(!w){notify('اسمح بالنوافذ المنبثقة للطباعة','warn');return;}
+  w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>إفادة</title>'+
+    '<link href="https://fonts.googleapis.com/css2?family=Cairo&display=swap" rel="stylesheet">'+
+    '<style>@page{size:auto;margin:0}html,body{margin:0;padding:0}body{direction:rtl}.wrap{position:relative;display:block;width:100%}.wrap img{width:100%;display:block}'+
+    '.afftxt{position:absolute;top:'+s.top+'%;right:'+s.side+'%;width:'+(100-2*s.side)+'%;text-align:justify;direction:rtl;white-space:pre-wrap;font-family:Cairo,\'Segoe UI\',Tahoma,sans-serif;color:#111;line-height:'+s.line+';}'+
+    '</style></head><body><div class="wrap"><img id="pfimg" src="'+src+'"><div class="afftxt" id="afftxt" data-fs="'+s.font+'">'+text.replace(/</g,'&lt;')+'</div></div>'+
+    '<scr'+'ipt>(function(){var img=document.getElementById("pfimg");function go(){var W=img.offsetWidth||img.naturalWidth||1;var D='+(fm.imgW||0)+'||W;var sc=D>0?(W/D):1;var t=document.getElementById("afftxt");t.style.fontSize=((parseFloat(t.getAttribute("data-fs"))||14)*sc)+"px";setTimeout(function(){try{window.print();}catch(e){}},400);}if(img.complete&&img.naturalWidth>0){go();}else{img.onload=go;img.onerror=function(){setTimeout(function(){try{window.print();}catch(e){}},400);};}})();</scr'+'ipt></body></html>');
+  w.document.close();
+}
+function _affSaveBgSettings(){
+  const tm=affidavits.find(a=>a.id===_affFillTmplId&&a.type==='tmpl'); if(!tm){notify('احفظ من قالب','warn');return;}
+  tm.bgFormId=_affBgSettings.formId; tm.bgTop=_affBgSettings.top; tm.bgSide=_affBgSettings.side; tm.bgFont=_affBgSettings.font; tm.bgLine=_affBgSettings.line;
+  saveAffidavits(); notify('💾 حُفظت إعدادات النموذج لهذا القالب');
+}
+function saveAffidavitRecord(){
+  const tm=affidavits.find(a=>a.id===_affFillTmplId&&a.type==='tmpl'); if(!tm)return;
+  const txt=(document.getElementById('affPreviewText')?document.getElementById('affPreviewText').value:'')||'';
+  affidavits.push({id:'afr_'+Date.now(),type:'rec',tmplId:tm.id,tmplName:tm.name,text:txt,at:Date.now(),date:todayStr()});
+  saveAffidavits(); notify('💾 حُفظت الإفادة بالأرشيف'); closeModal('affFillModal'); renderAffidavitsPage();
+}
+function openAffidavitView(id){
+  const r=affidavits.find(a=>a.id===id&&a.type==='rec'); if(!r)return;
+  document.getElementById('affFillTitle').textContent='👁️ '+(r.tmplName||'إفادة');
+  document.getElementById('affFillBody').innerHTML=`
+    <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:6px">نص الإفادة (${r.date||''}) — يمكنك التعديل قبل الطباعة:</label>
+    <textarea id="affPreviewText" rows="14" style="width:100%;padding:12px;background:var(--navy3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:14px;line-height:2;resize:vertical;direction:rtl">${esc(r.text||'')}</textarea>
+    <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-gold" onclick="printAffidavitText()" style="flex:1;justify-content:center">🖨️ طباعة</button></div>
+  `;
+  document.getElementById('affFillModal').style.display='block';
+}
 function renderCompoundPage(){
   const mp=document.getElementById('mainPanel');
   const sorted=[...compoundTxns].sort((a,b)=>b.serial-a.serial);
