@@ -3835,6 +3835,7 @@ function saveCompoundTxn(){
     date,time,
     cost:paid,paid,payStatus,note,phone,
     isCompound:true,
+    stage:'عند المندوب',
     compoundItems:_cmpItems.map(i=>({...i})),
     totalAgentCost,profit
   };
@@ -4621,6 +4622,105 @@ function doPrintCitizen(req){
 }
 
 // ===== TRANSACTIONS =====
+// ════════ نظام المسار + الدفع للمعاملات (محورين مستقلّين) ════════
+// المحور ١: الدفع — مشتَق من cost/paid (لا يُخزَّن، لا يتناقض أبداً)
+function txnPay(t){
+  const c=+t.cost||0, p=+t.paid||0;
+  if(p>=c) return {k:'مدفوع', cls:'pay-paid'};
+  if(p>0)  return {k:'جزئي', cls:'pay-partial'};
+  return {k:'غير مدفوع', cls:'pay-unpaid'};
+}
+// المحور ٢: المسار — حقل صريح على المعاملة نفسها (state machine)
+const TXN_STAGES={
+  'بالمكتب':    {icon:'🏢', c:'#88BBE8', bg:'rgba(76,139,201,0.15)', bd:'rgba(76,139,201,0.4)'},
+  'عند المندوب': {icon:'🚚', c:'#E0A44C', bg:'rgba(224,164,76,0.15)', bd:'rgba(224,164,76,0.45)'},
+  'جاهزة':      {icon:'📦', c:'#5EC8D8', bg:'rgba(94,200,216,0.15)', bd:'rgba(94,200,216,0.45)'},
+  'سُلّمت':      {icon:'🤝', c:'#7DCCA0', bg:'rgba(76,175,122,0.18)', bd:'rgba(76,175,122,0.45)'},
+  'ملغاة':      {icon:'✖', c:'#E88080', bg:'rgba(201,76,76,0.15)', bd:'rgba(201,76,76,0.4)'}
+};
+let _txnStageFilter='';
+function txnStage(t){ return (t.stage&&TXN_STAGES[t.stage])?t.stage:'بالمكتب'; }
+function stageChip(t){
+  const s=txnStage(t), st=TXN_STAGES[s];
+  const ag = s==='عند المندوب' && t.agentId ? ((agents.find(a=>a.id===t.agentId)||{}).name||'') : '';
+  return `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;background:${st.bg};color:${st.c};border:1px solid ${st.bd};white-space:nowrap">${st.icon} ${s}${ag?' · '+esc(ag):''}</span>`;
+}
+function payChip(t){ const p=txnPay(t); return `<span class="pay-badge ${p.cls}" style="font-size:10.5px">${p.k}</span>`; }
+// نقل المعاملة بين المراحل (مع ختم الوقت للتقادم والمحاسبة)
+function advanceTxnStage(id,newStage){
+  const t=transactions.find(x=>x.id===id); if(!t||!TXN_STAGES[newStage])return;
+  t.stage=newStage; t.stageAt=Date.now();
+  if(newStage==='سُلّمت')t.deliveredAt=Date.now();
+  if(!Array.isArray(t.stageLog))t.stageLog=[];
+  t.stageLog.push({s:newStage,at:Date.now()});
+  saveTxns();
+  notify(TXN_STAGES[newStage].icon+' المعاملة #'+formatSerial(t.serial)+' → '+newStage);
+  _reRenderTxnViews();
+}
+// تحويل لمندوب: نحفظ agentId + المرحلة على المعاملة نفسها (مصدر حقيقة واحد — لا drift)
+function assignTxnAgent(id){
+  const t=transactions.find(x=>x.id===id); if(!t)return;
+  if(!agents.length){notify('⚠️ لا يوجد مناديب — أضف مندوباً أولاً من صفحة المناديب','warn');return;}
+  const pick=prompt('اختر رقم المندوب لتحويل المعاملة إليه:\n\n'+agents.map((a,i)=>`${i+1}. ${a.name}`).join('\n'),'1');
+  if(!pick)return;
+  const idx=parseInt(pick)-1;
+  if(isNaN(idx)||idx<0||idx>=agents.length){notify('❌ رقم غير صحيح','red');return;}
+  t.agentId=agents[idx].id; t.stage='عند المندوب'; t.stageAt=Date.now();
+  if(!Array.isArray(t.stageLog))t.stageLog=[];
+  t.stageLog.push({s:'عند المندوب',at:Date.now(),ag:agents[idx].name});
+  saveTxns();
+  notify('🚚 حُوّلت المعاملة #'+formatSerial(t.serial)+' إلى المندوب '+agents[idx].name);
+  _reRenderTxnViews();
+}
+function _reRenderTxnViews(){
+  if(currentPage==='transactions')renderTransactionsPage();
+  else if(currentPage==='dashboard')renderDashboard();
+  else if(currentPage==='citizen_detail')renderCitizenDetail();
+}
+// أزرار المرحلة السياقية (تُظهر الخطوة التالية فقط — نظيفة على الموبايل)
+function txnStageBtns(t){
+  const s=txnStage(t);
+  const B=(oc,title,label,extra)=>`<button onclick="${oc}" title="${title}" style="font-size:10px;padding:3px 6px;border-radius:6px;${extra}">${label}</button>`;
+  if(s==='ملغاة') return B(`advanceTxnStage('${t.id}','بالمكتب')`,'إرجاع','↩','background:rgba(76,139,201,0.15);color:#88BBE8;border:1px solid rgba(76,139,201,0.35)');
+  let out='';
+  if(s==='بالمكتب') out+=B(`assignTxnAgent('${t.id}')`,'تحويل لمندوب','🚚',`background:${TXN_STAGES['عند المندوب'].bg};color:${TXN_STAGES['عند المندوب'].c};border:1px solid ${TXN_STAGES['عند المندوب'].bd}`);
+  let next=null,ic='';
+  if(s==='بالمكتب'){next='جاهزة';ic='📦';}
+  else if(s==='عند المندوب'){next='جاهزة';ic='📥';}
+  else if(s==='جاهزة'){next='سُلّمت';ic='🤝';}
+  if(next) out+=B(`advanceTxnStage('${t.id}','${next}')`,'→ '+next,ic,`background:${TXN_STAGES[next].bg};color:${TXN_STAGES[next].c};border:1px solid ${TXN_STAGES[next].bd}`);
+  if(s==='سُلّمت') out+=B(`advanceTxnStage('${t.id}','جاهزة')`,'تراجع','↩','background:var(--navy3);color:var(--text3);border:1px solid var(--border)');
+  return out;
+}
+// إحصاءات الأموال المعلّقة والمخاطر
+function txnMoneyStats(){
+  let receivable=0, atRisk=0, atAgentCount=0, atAgentMoney=0, undelivered=0;
+  transactions.forEach(t=>{
+    const s=txnStage(t); if(s==='ملغاة')return;
+    const rem=Math.max(0,(+t.cost||0)-(+t.paid||0));
+    receivable+=rem;
+    if(s==='سُلّمت'&&rem>0)atRisk+=rem;
+    if(s==='عند المندوب'){atAgentCount++; atAgentMoney+=(+t.totalAgentCost||0);}
+    if(s!=='سُلّمت')undelivered++;
+  });
+  return {receivable,atRisk,atAgentCount,atAgentMoney,undelivered};
+}
+function renderTxnStageChips(){
+  const el=document.getElementById('txnStageChips'); if(!el)return;
+  const cnt={'بالمكتب':0,'عند المندوب':0,'جاهزة':0,'سُلّمت':0}; let risk=0,unpaid=0;
+  transactions.forEach(t=>{const s=txnStage(t);if(s==='ملغاة')return;if(cnt[s]!==undefined)cnt[s]++;const rem=(+t.cost||0)-(+t.paid||0);if(rem>0){unpaid++;if(s==='سُلّمت')risk++;}});
+  const chip=(key,label,color,n)=>{const a=_txnStageFilter===key;return `<button onclick="setTxnStageFilter('${key}')" style="padding:5px 11px;border-radius:20px;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;border:1px solid ${a?color:'var(--border)'};background:${a?color+'22':'var(--navy2)'};color:${a?color:'var(--text2)'}">${label}${n!==undefined?' <b>'+n+'</b>':''}</button>`;};
+  el.innerHTML=[
+    chip('','الكل','#C9A84C',undefined),
+    chip('بالمكتب','🏢 بالمكتب','#88BBE8',cnt['بالمكتب']),
+    chip('عند المندوب','🚚 عند المندوب','#E0A44C',cnt['عند المندوب']),
+    chip('جاهزة','📦 جاهزة','#5EC8D8',cnt['جاهزة']),
+    chip('سُلّمت','🤝 سُلّمت','#7DCCA0',cnt['سُلّمت']),
+    chip('risk','⚠️ خطر خسارة','#E8804C',risk),
+    chip('unpaid','💰 غير مدفوعة','#E0A44C',unpaid)
+  ].join('');
+}
+function setTxnStageFilter(f){ _txnStageFilter=f; renderTxnStageChips(); applyTxnFilters(); }
 function renderTransactionsPage(){
   const mp=document.getElementById('mainPanel');
   const totalCost=transactions.reduce((s,t)=>s+(parseFloat(t.cost)||0),0);
@@ -4638,24 +4738,36 @@ function renderTransactionsPage(){
       </div>
     </div>
     <div class="panel-content">
-      <div class="dash-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px">
+      <div class="dash-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
         <div class="stat-card gold" style="padding:12px"><div class="sc-label">إجمالي المعاملات</div><div class="sc-value" style="font-size:22px">${transactions.length}</div></div>
         <div class="stat-card blue" style="padding:12px"><div class="sc-label">معاملات اليوم</div><div class="sc-value" style="font-size:22px">${todayT.length}</div></div>
         <div class="stat-card green" style="padding:12px"><div class="sc-label">محصّل اليوم</div><div class="sc-value" style="font-size:16px">${todayIncome.toLocaleString()} ل.ل</div></div>
         <div class="stat-card red" style="padding:12px"><div class="sc-label">رصيد غير محصّل</div><div class="sc-value" style="font-size:16px">${(totalCost-totalPaid).toLocaleString()} ل.ل</div></div>
       </div>
+      ${(()=>{const ms=txnMoneyStats();const box=(bg,bd,cl,lbl,val,sub)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:10px;padding:11px 13px"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">${lbl}</div><div style="font-size:15px;font-weight:800;color:${cl}">${val}</div>${sub?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${sub}</div>`:''}</div>`;return `
+      <div class="recent-card" style="margin-bottom:14px;padding:13px">
+        <div style="font-size:12px;font-weight:700;color:var(--gold3);margin-bottom:10px">💰 لوحة الأموال المعلّقة والمخاطر</div>
+        <div class="dash-grid" style="grid-template-columns:repeat(4,1fr);gap:10px">
+          ${box('rgba(201,76,76,0.08)','rgba(201,76,76,0.25)','#E88080','مستحق إجمالي على المواطنين',ms.receivable.toLocaleString()+' ل.ل','مجموع الأرصدة غير المحصّلة')}
+          ${box('rgba(232,128,76,0.1)','rgba(232,128,76,0.35)','#E8804C','⚠️ خطر خسارة فعلي',ms.atRisk.toLocaleString()+' ل.ل','سُلّمت الوثيقة ولم يُدفَع')}
+          ${box('rgba(224,164,76,0.1)','rgba(224,164,76,0.3)','#E0A44C','🔒 عند المندوب',ms.atAgentCount+' معاملة',ms.atAgentMoney>0?'رأس مال: '+ms.atAgentMoney.toLocaleString()+' ل.ل':'بانتظار الاسترجاع')}
+          ${box('rgba(76,139,201,0.1)','rgba(76,139,201,0.3)','#88BBE8','📤 غير مستلمة',ms.undelivered+' معاملة','لم تُسلَّم للمواطن بعد')}
+        </div>
+      </div>`;})()}
+      <div id="txnStageChips" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;overflow-x:auto"></div>
       <div style="display:flex;gap:10px;margin-bottom:12px">
         <input type="text" id="txnSearch" oninput="filterTxnTable()" placeholder="🔍 بحث..." style="flex:1;padding:8px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px">
         <select id="txnFilterStatus" onchange="filterTxnTable()" style="padding:8px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px">
-          <option value="">كل الحالات</option><option value="مدفوع بالكامل">مدفوع</option><option value="دفع جزئي">دفع جزئي</option><option value="غير مدفوع">غير مدفوع</option>
+          <option value="">كل حالات الدفع</option><option value="مدفوع بالكامل">مدفوع</option><option value="دفع جزئي">دفع جزئي</option><option value="غير مدفوع">غير مدفوع</option>
         </select>
       </div>
       <div class="recent-card">
-        <table class="rtable"><thead><tr><th>#</th><th>المواطن</th><th>الخدمة</th><th>التاريخ</th><th>الوقت</th><th>التكلفة</th><th>المدفوع</th><th>الفرق</th><th>الحالة</th><th></th></tr></thead>
+        <table class="rtable"><thead><tr><th>#</th><th>المواطن</th><th>الخدمة</th><th>التاريخ</th><th>الوقت</th><th>التكلفة</th><th>المدفوع</th><th>الفرق</th><th>المسار / الدفع</th><th></th></tr></thead>
         <tbody id="txnTbody"></tbody></table>
       </div>
     </div>`;
-  renderTxnTable(transactions);
+  renderTxnStageChips();
+  applyTxnFilters();
 }
 function renderTxnTable(list){
   const sorted=[...list].sort((a,b)=>b.serial-a.serial);
@@ -4670,18 +4782,28 @@ function renderTxnTable(list){
       <td>${(t.cost||0).toLocaleString()}</td>
       <td style="color:#7DCCA0">${(t.paid||0).toLocaleString()}</td>
       <td style="color:${(t.cost-t.paid)>0?'#E88080':'#7DCCA0'}">${((t.cost||0)-(t.paid||0)).toLocaleString()}</td>
-      <td><span class="pay-badge ${t.payStatus==='مدفوع بالكامل'?'pay-paid':t.payStatus==='غير مدفوع'?'pay-unpaid':'pay-partial'}">${t.payStatus}</span></td>
-      <td><div style='display:flex;gap:3px'><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px'>⚙️</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)'>🤝</button><button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px'>🗑️</button></div></td>
+      <td><div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${stageChip(t)}${payChip(t)}</div></td>
+      <td><div style='display:flex;gap:3px;align-items:center;flex-wrap:nowrap'>${txnStageBtns(t)}<span style="width:1px;height:16px;background:var(--border);margin:0 1px"></span><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px' title='واتساب: استلام'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px' title='واتساب: قيد الإنجاز'>⏳</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px' title='واتساب: جاهزة'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)' title='واتساب: تم التسليم'>🤝</button><button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px' title='حذف'>🗑️</button></div></td>
     </tr>`).join('');
 }
-function filterTxnTable(){
-  const f=(document.getElementById('txnSearch').value||'').toLowerCase();
-  const s=document.getElementById('txnFilterStatus').value;
-  renderTxnTable(transactions.filter(t=>
-    (!f||(t.citName||'').toLowerCase().includes(f)||(t.type||'').includes(f)||(t.serial+'').includes(f))&&
-    (!s||t.payStatus===s)
-  ));
+function applyTxnFilters(){
+  const f=(document.getElementById('txnSearch')?.value||'').toLowerCase();
+  const s=document.getElementById('txnFilterStatus')?.value||'';
+  const sf=_txnStageFilter;
+  const payMap={'مدفوع بالكامل':'مدفوع','دفع جزئي':'جزئي','غير مدفوع':'غير مدفوع'};
+  renderTxnTable(transactions.filter(t=>{
+    if(f && !((t.citName||'').toLowerCase().includes(f)||(t.type||'').includes(f)||((t.serial+'').includes(f)))) return false;
+    if(s && txnPay(t).k!==(payMap[s]||s)) return false;
+    if(sf){
+      const st=txnStage(t), rem=(+t.cost||0)-(+t.paid||0);
+      if(sf==='risk'){ if(!(st==='سُلّمت'&&rem>0))return false; }
+      else if(sf==='unpaid'){ if(!(rem>0&&st!=='ملغاة'))return false; }
+      else if(st!==sf) return false;
+    }
+    return true;
+  }));
 }
+function filterTxnTable(){ applyTxnFilters(); }
 function populateTxnSelect(){
   const sel=document.getElementById('txnType');
   if(!sel||sel.tagName!=='SELECT') return;
