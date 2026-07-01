@@ -1692,6 +1692,8 @@ function savePerms(){
 function canAccess(page){
   if(!currentUser||currentUser==='admin'||currentUser==='مختار')return true;
   const p=userPerms[currentUser];
+  // صفحات حسّاسة (مالية): مرفوضة افتراضياً — تظهر فقط للأدمن أو من مُنِح صلاحية صريحة (موثوق)
+  if(page==='profits') return !!(p && p[page]===true);
   if(!p)return true; // no restrictions set = allow all
   return p[page]!==false;
 }
@@ -2331,6 +2333,7 @@ function doLogout(){
 
 // ===== NAV =====
 function showPage(page,navEl){
+  if(!canAccess(page)){ notify('🔒 لا تملك صلاحية الوصول إلى هذه الصفحة','red'); return; }
   // حفظ بيانات المواطن وترتيب الحقول قبل مغادرة الصفحة
   if(currentPage==='citizen_detail'){
     const c=_captureCitizenFields(); // ✅ يكتب للمواطن المعروض فعلاً (_renderedCitId) — آمن حتى عند الانتقال لمواطن آخر
@@ -3197,7 +3200,7 @@ function renderPermissionsPage(){
           <div style="font-size:11px;font-weight:600;color:var(--gold3);letter-spacing:1px;margin-bottom:10px">الصلاحيات — فعّل ما تريد السماح به:</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px">
             ${ALL_PAGES.map(pg=>{
-              const allowed=p[pg.key]!==false;
+              const allowed=pg.key==='profits'?(p[pg.key]===true):(p[pg.key]!==false); // الأرباح: تتطلب منحاً صريحاً
               return`<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:${allowed?'rgba(201,168,76,0.08)':'var(--navy)'};border:1px solid ${allowed?'var(--border2)':'var(--border)'};border-radius:8px;cursor:pointer;transition:all 0.15s">
                 <input type="checkbox" ${allowed?'checked':''} onchange="togglePerm('${uname}','${pg.key}',this.checked)" style="accent-color:var(--gold);width:15px;height:15px;cursor:pointer">
                 <span style="font-size:12px;color:${allowed?'var(--text)':'var(--text3)'}">${pg.ico} ${pg.label}</span>
@@ -4784,23 +4787,6 @@ function renderTransactionsPage(){
         <div class="stat-card green" style="padding:12px"><div class="sc-label">محصّل اليوم</div><div class="sc-value" style="font-size:16px">${todayIncome.toLocaleString()} ل.ل</div></div>
         <div class="stat-card red" style="padding:12px"><div class="sc-label">رصيد غير محصّل</div><div class="sc-value" style="font-size:16px">${(totalCost-totalPaid).toLocaleString()} ل.ل</div></div>
       </div>
-      ${(()=>{const ms=txnMoneyStats();const box=(bg,bd,cl,lbl,val,sub)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:10px;padding:11px 13px"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">${lbl}</div><div style="font-size:15px;font-weight:800;color:${cl}">${val}</div>${sub?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${sub}</div>`:''}</div>`;const ps=txnProfitStats();return `
-      <div class="recent-card" style="margin-bottom:14px;padding:13px">
-        <div style="font-size:12px;font-weight:700;color:var(--gold3);margin-bottom:10px">💰 لوحة الأموال المعلّقة والمخاطر</div>
-        <div class="dash-grid" style="grid-template-columns:repeat(4,1fr);gap:10px">
-          ${box('rgba(201,76,76,0.08)','rgba(201,76,76,0.25)','#E88080','مستحق إجمالي على المواطنين',ms.receivable.toLocaleString()+' ل.ل','مجموع الأرصدة غير المحصّلة')}
-          ${box('rgba(232,128,76,0.1)','rgba(232,128,76,0.35)','#E8804C','⚠️ خطر خسارة فعلي',ms.atRisk.toLocaleString()+' ل.ل','سُلّمت الوثيقة ولم يُدفَع')}
-          ${box('rgba(224,164,76,0.1)','rgba(224,164,76,0.3)','#E0A44C','🔒 عند المندوب',ms.atAgentCount+' معاملة',ms.atAgentMoney>0?'رأس مال: '+ms.atAgentMoney.toLocaleString()+' ل.ل':'بانتظار الاسترجاع')}
-          ${box('rgba(76,139,201,0.1)','rgba(76,139,201,0.3)','#88BBE8','📤 غير مستلمة',ms.undelivered+' معاملة','لم تُسلَّم للمواطن بعد')}
-        </div>
-        <div style="height:1px;background:var(--border);margin:12px 0"></div>
-        <div style="font-size:12px;font-weight:700;color:var(--gold3);margin-bottom:10px">📈 الأرباح (الربح يُحسَب عند التحصيل فقط)</div>
-        <div class="dash-grid" style="grid-template-columns:repeat(3,1fr);gap:10px">
-          ${box('rgba(76,175,122,0.1)','rgba(76,175,122,0.3)',ps.realized>=0?'#7DCCA0':'#E88080','✅ صافي الربح المحقّق',ps.realized.toLocaleString()+' ل.ل','المحصّل − التكاليف')}
-          ${box('rgba(232,128,76,0.1)','rgba(232,128,76,0.3)','#E8804C','⏳ تكاليف معلّقة (جرور)',ps.pendingCost.toLocaleString()+' ل.ل','مصروفة ولم تُسترجَع بعد')}
-          ${box('rgba(201,168,76,0.08)','rgba(201,168,76,0.25)','#E0C060','🎯 ربح متوقّع كامل',ps.potential.toLocaleString()+' ل.ل','لو حُصّلت كل المبيعات')}
-        </div>
-      </div>`;})()}
       <div id="txnStageChips" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;overflow-x:auto"></div>
       <div style="display:flex;gap:10px;margin-bottom:12px">
         <input type="text" id="txnSearch" oninput="filterTxnTable()" placeholder="🔍 بحث..." style="flex:1;padding:8px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px">
@@ -4829,7 +4815,7 @@ function renderTxnTable(list){
       <td>${(t.cost||0).toLocaleString()}</td>
       <td style="color:#7DCCA0">${(t.paid||0).toLocaleString()}</td>
       <td style="color:${(t.cost-t.paid)>0?'#E88080':'#7DCCA0'}">${((t.cost||0)-(t.paid||0)).toLocaleString()}</td>
-      <td><div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="تعديل الدفع / إضافة دفعة / سجل الدفعات">${payChip(t)}</span>${txnBuy(t)>0?`<span style="font-size:9.5px;font-weight:700;color:${txnRealizedProfit(t)>=0?'#7DCCA0':'#E88080'}" title="ربح محقّق (المحصّل − التكلفة)">ربح: ${txnRealizedProfit(t).toLocaleString()}</span>`:''}</div></td>
+      <td><div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="تعديل الدفع / إضافة دفعة / سجل الدفعات">${payChip(t)}</span></div></td>
       <td><div style='display:flex;gap:3px;align-items:center;flex-wrap:nowrap'>${txnStageBtns(t)}<span style="width:1px;height:16px;background:var(--border);margin:0 1px"></span><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px' title='واتساب: استلام'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px' title='واتساب: قيد الإنجاز'>⏳</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px' title='واتساب: جاهزة'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)' title='واتساب: تم التسليم'>🤝</button><button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px' title='حذف'>🗑️</button></div></td>
     </tr>`).join('');
 }
@@ -7291,6 +7277,16 @@ function renderProfitsPage(){
         <div class="stat-card ${compoundProfit>=0?'green':'red'}" style="padding:14px"><div class="sc-label">ربح المعاملات المركبة</div><div class="sc-value" style="font-size:18px;color:${compoundProfit>=0?'#7DCCA0':'#E88080'}">${compoundProfit.toLocaleString()}</div><div class="sc-sub">من ${compoundTxns.length} معاملة</div></div>
         <div class="stat-card red" style="padding:14px"><div class="sc-label">ديون مستحقة</div><div class="sc-value" style="font-size:18px">${(debtTotal-debtPaid).toLocaleString()}</div><div class="sc-sub">ل.ل غير محصّلة</div></div>
       </div>
+      ${(()=>{const ms=txnMoneyStats();const b=(bg,bd,cl,l,v,s)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">${l}</div><div style="font-size:17px;font-weight:800;color:${cl}">${v}</div>${s?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${s}</div>`:''}</div>`;return `
+      <div class="recent-card" style="margin-bottom:20px;padding:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold3);margin-bottom:12px">💰 الأموال المعلّقة والمخاطر</div>
+        <div class="dash-grid" style="grid-template-columns:repeat(4,1fr);gap:12px">
+          ${b('rgba(201,76,76,0.08)','rgba(201,76,76,0.25)','#E88080','مستحق إجمالي على المواطنين',ms.receivable.toLocaleString()+' ل.ل','مجموع الأرصدة غير المحصّلة')}
+          ${b('rgba(232,128,76,0.1)','rgba(232,128,76,0.35)','#E8804C','⚠️ خطر خسارة فعلي',ms.atRisk.toLocaleString()+' ل.ل','سُلّمت الوثيقة ولم يُدفَع')}
+          ${b('rgba(224,164,76,0.1)','rgba(224,164,76,0.3)','#E0A44C','🔒 عند المندوب',ms.atAgentCount+' معاملة',ms.atAgentMoney>0?'رأس مال: '+ms.atAgentMoney.toLocaleString()+' ل.ل':'بانتظار الاسترجاع')}
+          ${b('rgba(76,139,201,0.1)','rgba(76,139,201,0.3)','#88BBE8','📤 غير مستلمة',ms.undelivered+' معاملة','لم تُسلَّم للمواطن بعد')}
+        </div>
+      </div>`;})()}
       ${(()=>{const ps=txnProfitStats();const b=(bg,bd,cl,l,v,s)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">${l}</div><div style="font-size:17px;font-weight:800;color:${cl}">${v}</div>${s?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${s}</div>`:''}</div>`;return `
       <div class="recent-card" style="margin-bottom:20px;padding:14px">
         <div style="font-size:13px;font-weight:700;color:var(--gold3);margin-bottom:12px">📈 أرباح المعاملات — الربح يُحسَب عند التحصيل فقط</div>
