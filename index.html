@@ -5204,16 +5204,21 @@ function renderAgentTransfer(){
   }
   document.getElementById('agentTransferBody').innerHTML=`
     ${chainHtml}
-    ${active?`<div style="font-size:11px;color:var(--text2);margin-bottom:10px">المندوب الحالي سينهي دوره، وتنتقل المعاملة إلى المندوب الجديد.</div>`:''}
+    ${active?`<div style="font-size:11px;color:var(--text2);margin-bottom:10px">أكّد كم صار على المندوب الحالي فعلياً، ثم اختر المندوب الجديد.</div>
     <div class="form-field" style="margin-bottom:10px">
-      <label>المندوب ${isFirst?'':'الجديد'}</label>
+      <label>💵 كم صار على ${esc((agents.find(a=>a.id===active.agentId)||{}).name||'المندوب الحالي')} فعلياً؟ (ل.ل)</label>
+      <input type="number" id="transferOutCost" value="${active.cost||''}" placeholder="0" style="width:100%;padding:9px 12px;background:var(--navy3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-size:14px;font-weight:700;text-align:center">
+    </div>
+    <div style="height:1px;background:var(--border);margin:12px 0"></div>`:''}
+    <div class="form-field" style="margin-bottom:10px">
+      <label>${active?'↪️ ':''}المندوب ${isFirst?'':'الجديد'}</label>
       <select id="transferAgentSel" style="width:100%;padding:9px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Cairo,sans-serif;font-size:13px;direction:rtl">
         <option value="">— اختر المندوب —</option>
         ${agents.filter(a=>a.id!==currentAgentId).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('')}
       </select>
     </div>
     <div class="form-field">
-      <label>تكلفة هذا المندوب (ل.ل)</label>
+      <label>تكلفة المندوب الجديد (اختياري — تؤكّدها عند الاستلام)</label>
       <input type="number" id="transferCost" value="${(isFirst&&+t.buyCost)?(+t.buyCost):''}" placeholder="0" min="0" style="width:100%;padding:10px;background:var(--navy3);border:2px solid var(--border2);border-radius:8px;color:var(--text);font-size:16px;font-weight:700;text-align:center">
     </div>
   `;
@@ -5225,7 +5230,11 @@ function confirmAgentTransfer(){
   const cost=parseFloat(document.getElementById('transferCost').value)||0;
   const ch=_txnChain(t);
   const active=ch.find(l=>l.status==='active');
-  if(active){ active.status='done'; active.doneAt=Date.now(); }
+  if(active){
+    const oc=document.getElementById('transferOutCost'); // أكّد تكلفة المندوب الحالي الفعلية
+    if(oc && oc.value.trim()!=='') active.cost=parseFloat(oc.value)||0;
+    active.status='done'; active.doneAt=Date.now();
+  }
   ch.push({agentId:agentId, cost:cost, at:Date.now(), status:'active'});
   t.agentId=agentId; t.stage='عند المندوب'; t.stageAt=Date.now();
   if(!Array.isArray(t.stageLog))t.stageLog=[];
@@ -5306,6 +5315,7 @@ function txnStageBtns(t){
   let out='';
   if(s==='بالمكتب' && !hasSubs) out+=B(`openAgentTransfer('${t.id}')`,'تحويل لمندوب','🚚',`background:${TXN_STAGES['عند المندوب'].bg};color:${TXN_STAGES['عند المندوب'].c};border:1px solid ${TXN_STAGES['عند المندوب'].bd}`);
   if(s==='عند المندوب' && !hasSubs) out+=B(`openAgentTransfer('${t.id}')`,'حوّل لمندوب آخر','↪️','background:rgba(76,139,201,0.15);color:#88BBE8;border:1px solid rgba(76,139,201,0.35)');
+  if(s==='جاهزة' && !hasSubs) out+=B(`openAgentTransfer('${t.id}')`,'إرسال لمندوب','↪️','background:rgba(224,164,76,0.12);color:#E0A44C;border:1px solid rgba(224,164,76,0.3)');
   let next=null,ic='';
   if(s==='بالمكتب'){next='جاهزة';ic='📦';}
   else if(s==='عند المندوب'){next='جاهزة';ic='📥';}
