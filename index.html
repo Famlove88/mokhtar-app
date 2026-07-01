@@ -835,6 +835,13 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
         <div class="form-field"><label>الفرق</label><input type="text" id="txnDiff" readonly></div>
         <div class="form-field full"><label>ملاحظات المعاملة</label><textarea id="txnNote" rows="2" placeholder="أي ملاحظة تظهر على النموذج..." style="padding:9px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px;width:100%;resize:vertical;direction:rtl"></textarea></div>
       </div>
+      <div id="privSubSection" style="display:none;margin-top:12px;padding:12px;background:var(--navy3);border:1px solid rgba(224,164,76,0.35);border-radius:10px">
+        <div style="font-size:12px;font-weight:700;color:#E0A44C;margin-bottom:4px">🧩 بنود الخدمة الخاصة</div>
+        <div style="font-size:10.5px;color:var(--text3);margin-bottom:9px">خدمة مؤلّفة من عدّة معاملات — كل بند: وصف + مندوب + تكلفته. الإجمالي = مجموع التكاليف.</div>
+        <div id="privSubList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px"></div>
+        <button type="button" class="btn btn-outline" onclick="addPrivSubItem()" style="width:100%;justify-content:center;font-size:12px;padding:7px">+ إضافة بند</button>
+        <div style="margin-top:9px;font-size:12.5px;color:var(--text2);text-align:left">إجمالي التكلفة: <strong id="privSubTotal" style="color:#E0A44C">0 ل.ل</strong></div>
+      </div>
       <div class="modal-actions"><button class="btn btn-gold" onclick="saveTxn()">✓ حفظ المعاملة</button><button class="btn btn-outline" onclick="closeModal('txnModal')">إلغاء</button></div>
     </div>
   </div>
@@ -1044,6 +1051,19 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
       <div class="modal-actions" style="margin-top:12px">
         <button class="btn btn-gold" onclick="confirmWaSend()" style="flex:1;justify-content:center;font-size:14px;padding:10px">📲 إرسال</button>
         <button class="btn btn-outline" onclick="closeModal('waSendModal')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- بنود الخدمة الخاصة (تتبّع وإكمال) -->
+<div id="subItemsModal" style="display:none">
+  <div class="modal-overlay">
+    <div class="modal-box" style="width:460px;max-width:94vw;max-height:90vh;overflow-y:auto">
+      <div class="modal-title">🧩 بنود الخدمة</div>
+      <div id="subItemsBody"></div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button class="btn btn-outline" onclick="closeModal('subItemsModal')" style="flex:1;justify-content:center">إغلاق</button>
       </div>
     </div>
   </div>
@@ -3005,13 +3025,25 @@ function renderAgentDetail(){
     <div style="padding:0 24px;margin:10px 0 4px">
       <div class="recent-card" style="padding:13px;border:1px solid rgba(224,164,76,0.35)">
         <div style="font-size:12px;font-weight:700;color:#E0A44C;margin-bottom:10px">🚚 معاملات محوّلة إليه من المكتب — بانتظار الاسترجاع (${ats.length})</div>
-        ${ats.map(t=>{const cit=t.citId?citizens.find(c=>c.id===t.citId):null;return `
-          <div style="background:var(--navy2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-            <div style="flex:1;min-width:180px">
-              <div style="font-size:13px;font-weight:700;color:var(--text)">${esc(t.type||'—')} <span style="color:var(--gold);font-size:11px">#${formatSerial(t.serial)}</span></div>
-              <div style="font-size:11px;color:var(--text3);margin-top:3px">👤 ${esc(t.citName||(cit?citName(cit):'—'))} · 📅 ${t.date||'—'}${txnBuy(t)>0?` · تكلفة: <span style="color:#E0A44C">${txnBuy(t).toLocaleString()} ل.ل</span>`:''}</div>
+        ${ats.map(t=>{const cit=t.citId?citizens.find(c=>c.id===t.citId):null;
+          const myItems=Array.isArray(t.subItems)?t.subItems.filter(i=>i.agentId===ag.id):[];
+          const isPartService=myItems.length>0;
+          return `
+          <div style="background:var(--navy2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <div style="flex:1;min-width:180px">
+                <div style="font-size:13px;font-weight:700;color:var(--text)">${isPartService?'🚗 ':''}${esc(t.type||'—')} <span style="color:var(--gold);font-size:11px">${isPartService?'':'#'}${formatSerial(t.serial)}</span></div>
+                <div style="font-size:11px;color:var(--text3);margin-top:3px">👤 ${esc(t.citName||(cit?citName(cit):'—'))} · 📅 ${t.date||'—'}${!isPartService&&txnBuy(t)>0?` · تكلفة: <span style="color:#E0A44C">${txnBuy(t).toLocaleString()} ل.ل</span>`:''}</div>
+              </div>
+              ${!isPartService?`<button class="btn btn-green" onclick="receiveTxnFromAgent('${t.id}')" style="font-size:11px;padding:5px 10px" title="استُرجعت المعاملة → تصبح جاهزة للتسليم">📥 استلمت من المندوب</button>`:''}
             </div>
-            <button class="btn btn-green" onclick="receiveTxnFromAgent('${t.id}')" style="font-size:11px;padding:5px 10px" title="استُرجعت المعاملة → تصبح جاهزة للتسليم">📥 استلمت من المندوب</button>
+            ${isPartService?`<div style="margin-top:9px;padding-top:9px;border-top:1px dashed var(--border)">
+              <div style="font-size:10.5px;color:var(--text3);margin-bottom:6px">البنود المُسنَدة إليك في هذه الخدمة:</div>
+              ${myItems.map(it=>{const d=it.status==='مسترجع';return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+                <div style="flex:1;font-size:12px;color:var(--text);${d?'opacity:.6':''}">${d?'✓ ':''}${esc(it.desc||'بند')} <span style="color:#E0A44C">(${(+it.agentCost||0).toLocaleString()} ل.ل)</span></div>
+                <button class="btn" onclick="_agentToggleSub('${t.id}','${it.id}')" style="font-size:10.5px;padding:4px 9px;${d?'background:rgba(76,175,122,0.15);color:#7DCCA0;border:1px solid rgba(76,175,122,0.35)':'background:var(--navy3);color:var(--text2);border:1px solid var(--border)'}">${d?'✓ مكتمل':'📥 استلمت هذا البند'}</button>
+              </div>`;}).join('')}
+            </div>`:''}
           </div>`;}).join('')}
       </div>
     </div>`;})()}
@@ -4722,7 +4754,70 @@ function nextPrivateSerial(){
   return 'S-'+String(mx+1).padStart(3,'0');
 }
 // ─── الربح: التكلفة تُسترجَع أولاً من المحصّل، وما يزيد هو الربح المحقّق ───
-function txnBuy(t){ return (+t.buyCost||0) || (+t.totalAgentCost||0); }           // تكلفة المكتب الفعلية
+function txnBuy(t){ // تكلفة المكتب الفعلية — للخدمة الخاصة متعددة البنود = مجموع تكاليف البنود
+  if(t&&Array.isArray(t.subItems)&&t.subItems.length) return t.subItems.reduce((s,i)=>s+(+i.agentCost||0),0);
+  return (+t.buyCost||0) || (+t.totalAgentCost||0);
+}
+// ─── بنود الخدمة الخاصة (بناء داخل المودال) ───
+let _privSubItems=[];
+function addPrivSubItem(){ _privSubItems.push({id:'si_'+Date.now()+'_'+Math.floor(Math.random()*1000),desc:'',agentId:'',agentCost:0,status:'قيد الإنجاز'}); renderPrivSubList(); _recalcPrivSub(); }
+function renderPrivSubList(){
+  const box=document.getElementById('privSubList'); if(!box)return;
+  box.innerHTML=_privSubItems.length?_privSubItems.map((it,i)=>`
+    <div style="display:flex;gap:5px;align-items:center">
+      <input type="text" value="${esc(it.desc||'')}" oninput="_privSubItems[${i}].desc=this.value" placeholder="وصف البند (مثلاً: فحص ميكانيك)" style="flex:2;padding:6px 8px;background:var(--navy2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+      <select onchange="_privSubItems[${i}].agentId=this.value" style="flex:1.2;padding:6px;background:var(--navy2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px">
+        <option value="">— مندوب —</option>
+        ${agents.map(a=>`<option value="${a.id}" ${it.agentId===a.id?'selected':''}>${esc(a.name)}</option>`).join('')}
+      </select>
+      <input type="number" value="${it.agentCost||''}" oninput="_privSubItems[${i}].agentCost=parseFloat(this.value)||0;_recalcPrivSub()" placeholder="تكلفة" style="width:72px;padding:6px;background:var(--navy2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;text-align:center">
+      <button type="button" onclick="_privSubItems.splice(${i},1);renderPrivSubList();_recalcPrivSub()" style="background:rgba(201,76,76,0.15);color:#E88080;border:1px solid rgba(201,76,76,0.3);border-radius:6px;padding:5px 8px;cursor:pointer;font-size:12px" title="حذف البند">✕</button>
+    </div>`).join(''):'<div style="font-size:11px;color:var(--text3);text-align:center;padding:6px">لا بنود بعد — اضغط "إضافة بند"</div>';
+}
+function _recalcPrivSub(){
+  const tot=_privSubItems.reduce((s,i)=>s+(+i.agentCost||0),0);
+  const el=document.getElementById('privSubTotal'); if(el)el.textContent=tot.toLocaleString()+' ل.ل';
+  const bc=document.getElementById('txnBuyCost'); if(bc){ bc.value=tot; bc.readOnly=true; bc.style.opacity='0.7'; }
+  if(typeof calcTxnStatus==='function')calcTxnStatus();
+}
+// ─── إدارة بنود الخدمة بعد الإنشاء (تتبّع + إكمال + جاهزية تلقائية) ───
+let _subItemsTxnId=null;
+function openSubItems(txnId){ _subItemsTxnId=txnId; renderSubItemsModal(); document.getElementById('subItemsModal').style.display='block'; }
+function renderSubItemsModal(){
+  const t=transactions.find(x=>x.id===_subItemsTxnId); if(!t)return;
+  const items=Array.isArray(t.subItems)?t.subItems:[];
+  const done=items.filter(i=>i.status==='مسترجع').length;
+  const totCost=items.reduce((s,i)=>s+(+i.agentCost||0),0);
+  document.getElementById('subItemsBody').innerHTML=`
+    <div style="background:var(--navy3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:var(--text)">🚗 ${formatSerial(t.serial)} — ${esc(t.citName||'—')}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">${esc(t.type||'')} · التكلفة الإجمالية: <strong style="color:#E0A44C">${totCost.toLocaleString()} ل.ل</strong></div>
+      <div style="margin-top:9px;height:7px;background:var(--navy2);border-radius:4px;overflow:hidden"><div style="height:100%;width:${items.length?Math.round(done/items.length*100):0}%;background:#7DCCA0;transition:width .3s"></div></div>
+      <div style="font-size:10.5px;color:var(--text3);margin-top:5px">${done} من ${items.length} بند مكتمل</div>
+    </div>
+    ${items.map(it=>{const ag=agents.find(a=>a.id===it.agentId);const d=it.status==='مسترجع';return `
+      <div style="display:flex;align-items:center;gap:10px;background:${d?'rgba(76,175,122,0.08)':'var(--navy2)'};border:1px solid ${d?'rgba(76,175,122,0.3)':'var(--border)'};border-radius:9px;padding:10px 11px;margin-bottom:6px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12.5px;font-weight:700;color:var(--text)">${d?'✓ ':''}${esc(it.desc||'بند')}</div>
+          <div style="font-size:10.5px;color:var(--text3);margin-top:2px">🚚 ${ag?esc(ag.name):'بلا مندوب'} · ${(+it.agentCost||0).toLocaleString()} ل.ل</div>
+        </div>
+        <button class="btn" onclick="toggleSubItem('${it.id}')" style="font-size:11px;padding:5px 10px;white-space:nowrap;${d?'background:rgba(76,175,122,0.15);color:#7DCCA0;border:1px solid rgba(76,175,122,0.35)':'background:var(--navy3);color:var(--text2);border:1px solid var(--border)'}">${d?'✓ مكتمل':'تعليم كمكتمل'}</button>
+      </div>`;}).join('')||'<div style="text-align:center;color:var(--text3);padding:14px">لا بنود</div>'}
+  `;
+}
+function _agentToggleSub(txnId,itemId){ _subItemsTxnId=txnId; toggleSubItem(itemId); } // من ملف المندوب
+function toggleSubItem(itemId){
+  const t=transactions.find(x=>x.id===_subItemsTxnId); if(!t||!Array.isArray(t.subItems))return;
+  const it=t.subItems.find(x=>x.id===itemId); if(!it)return;
+  it.status=it.status==='مسترجع'?'قيد الإنجاز':'مسترجع';
+  const all=t.subItems.length>0 && t.subItems.every(x=>x.status==='مسترجع');
+  const cur=txnStage(t);
+  if(all && cur!=='سُلّمت' && cur!=='جاهزة'){ t.stage='جاهزة'; t.stageAt=Date.now(); if(!Array.isArray(t.stageLog))t.stageLog=[]; t.stageLog.push({s:'جاهزة',at:Date.now()}); notify('✅ اكتملت كل البنود — الخدمة #'+formatSerial(t.serial)+' جاهزة للتسليم'); }
+  else if(!all && cur==='جاهزة'){ t.stage='عند المندوب'; t.stageAt=Date.now(); if(!Array.isArray(t.stageLog))t.stageLog=[]; t.stageLog.push({s:'عند المندوب',at:Date.now()}); }
+  saveTxns();
+  renderSubItemsModal();
+  _reRenderTxnViews();
+}
 function txnRealizedProfit(t){ return (+t.paid||0) - txnBuy(t); }                  // ربح محقّق = المحصّل − التكلفة (قد يكون سالباً = جرور)
 function txnPotentialProfit(t){ return (+t.cost||0) - txnBuy(t); }                 // ربح متوقّع لو حُصّل كامل سعر البيع
 function txnPendingCost(t){ return Math.max(0, txnBuy(t) - (+t.paid||0)); }        // تكلفة معلّقة (مصروفة ولم تُسترجَع بعد)
@@ -4767,7 +4862,14 @@ function _reRenderTxnViews(){
   else if(currentPage==='agent_detail')renderAgentDetail();
 }
 // معاملات محوّلة لمندوب معيّن — تُشتَق من المعاملة نفسها (مصدر حقيقة واحد، لا drift)
-function _agentTxns(agId){ return transactions.filter(t=>t.agentId===agId && txnStage(t)==='عند المندوب'); }
+// تشمل: (أ) معاملة كاملة محوّلة إليه، (ب) خدمة خاصة فيها بند قيد الإنجاز مُسنَد إليه
+function _agentTxns(agId){
+  return transactions.filter(function(t){
+    if(t.agentId===agId && txnStage(t)==='عند المندوب') return true;
+    if(Array.isArray(t.subItems) && t.subItems.some(function(i){return i.agentId===agId && i.status!=='مسترجع';})) return true;
+    return false;
+  });
+}
 function receiveTxnFromAgent(id){ advanceTxnStage(id,'جاهزة'); } // ترجع "جاهزة" فتختفي من ملف المندوب
 // ═══════ نظام التقادم (Aging) — العمر = كم يوم في المرحلة الحالية ═══════
 function _txnRefTime(t){
@@ -4920,7 +5022,7 @@ function renderTxnTable(list){
       <td style="color:#7DCCA0">${(t.paid||0).toLocaleString()}</td>
       <td style="color:${(t.cost-t.paid)>0?'#E88080':'#7DCCA0'}">${((t.cost||0)-(t.paid||0)).toLocaleString()}</td>
       <td><div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="تعديل الدفع / إضافة دفعة / سجل الدفعات">${payChip(t)}</span></div></td>
-      <td><div style='display:flex;gap:3px;align-items:center;flex-wrap:nowrap'>${txnStageBtns(t)}<span style="width:1px;height:16px;background:var(--border);margin:0 1px"></span><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px' title='واتساب: استلام'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px' title='واتساب: قيد الإنجاز'>⏳</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px' title='واتساب: جاهزة'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)' title='واتساب: تم التسليم'>🤝</button><button class='btn' onclick="sendWhatsAppEditable('${t.id}','تأخير')" style='font-size:10px;padding:3px 5px;background:rgba(232,128,76,0.15);color:#E8804C;border:1px solid rgba(232,128,76,0.4)' title='اعتذار تأخير (قابل للتعديل قبل الإرسال)'>⏰</button><button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px' title='حذف'>🗑️</button></div></td>
+      <td><div style='display:flex;gap:3px;align-items:center;flex-wrap:nowrap'>${txnStageBtns(t)}<span style="width:1px;height:16px;background:var(--border);margin:0 1px"></span><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px' title='واتساب: استلام'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px' title='واتساب: قيد الإنجاز'>⏳</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px' title='واتساب: جاهزة'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)' title='واتساب: تم التسليم'>🤝</button><button class='btn' onclick="sendWhatsAppEditable('${t.id}','تأخير')" style='font-size:10px;padding:3px 5px;background:rgba(232,128,76,0.15);color:#E8804C;border:1px solid rgba(232,128,76,0.4)' title='اعتذار تأخير (قابل للتعديل قبل الإرسال)'>⏰</button>${Array.isArray(t.subItems)&&t.subItems.length?`<button class='btn' onclick="openSubItems('${t.id}')" style='font-size:10px;padding:3px 5px;background:rgba(224,164,76,0.15);color:#E0A44C;border:1px solid rgba(224,164,76,0.4)' title='بنود الخدمة (${t.subItems.filter(i=>i.status==='مسترجع').length}/${t.subItems.length})'>🧩</button>`:''}<button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px' title='حذف'>🗑️</button></div></td>
     </tr>`).join('');
 }
 function applyTxnFilters(){
@@ -4976,6 +5078,14 @@ function setTxnKind(k){
   }
   const se=document.getElementById('txnSerial'); // معاينة الرقم حسب النوع
   if(se)se.value='#'+(k==='private'?nextPrivateSerial():formatSerial(nextSerial()));
+  const sec=document.getElementById('privSubSection'), bc=document.getElementById('txnBuyCost');
+  if(k==='private'){
+    if(sec)sec.style.display='';
+    renderPrivSubList(); _recalcPrivSub(); // التكلفة = مجموع البنود (للقراءة)
+  }else{
+    if(sec)sec.style.display='none';
+    if(bc){ bc.readOnly=false; bc.style.opacity='1'; } // التكلفة يدوية للرسمية
+  }
 }
 function openTxnModal(){
   const modal=document.getElementById('txnModal');
@@ -4993,6 +5103,7 @@ function openTxnModal(){
   document.getElementById('txnDiff').value='';
   const _tnEl=document.getElementById('txnNote');if(_tnEl)_tnEl.value='';
   const _tp=document.getElementById('txnPhone');if(_tp)_tp.value='';
+  _privSubItems=[]; // تصفير بنود الخدمة الخاصة
   setTxnKind('official'); // افتراضياً رسمية
   modal._citId=null;
 }
@@ -5035,9 +5146,13 @@ function saveTxn(){
   if(!typeVal||typeVal==='__new__'){notify('❌ اختر نوع المعاملة','red');return;}
   calcTxnStatus();
   const _kind=(document.getElementById('txnKind')||{}).value==='private'?'private':'official';
+  const _subs=(_kind==='private'&&_privSubItems.length)?_privSubItems.map(function(x){return {id:x.id,desc:x.desc,agentId:x.agentId,agentCost:+x.agentCost||0,status:x.status||'قيد الإنجاز'};}):null;
   const t={
     id:'t_'+Date.now(),serial:_kind==='private'?nextPrivateSerial():nextSerial(),
     kind:_kind,
+    subItems:_subs,
+    stage:(_subs&&_subs.length)?'عند المندوب':undefined,       // بنود عند المناديب → المسار يبدأ "عند المندوب"
+    stageAt:(_subs&&_subs.length)?Date.now():undefined,
     citId:document.getElementById('txnModal')._citId||null,
     citName,type:typeVal==='__new__'?type:typeVal,
     date:new Date().toLocaleDateString('ar-LB',{year:'numeric',month:'2-digit',day:'2-digit'}),
