@@ -999,6 +999,32 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
   </div>
 </div>
 
+<!-- محرّر الدفعة السريع (من سجل المعاملات) -->
+<div id="txnPayModal" style="display:none">
+  <div class="modal-overlay">
+    <div class="modal-box" style="width:420px;max-width:94vw;max-height:90vh;overflow-y:auto">
+      <div class="modal-title">💳 إدارة الدفع</div>
+      <div id="txnPayBody"></div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button class="btn btn-outline" onclick="closeModal('txnPayModal')" style="flex:1;justify-content:center">إغلاق</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ملف الدَّين الكامل -->
+<div id="debtFileModal" style="display:none">
+  <div class="modal-overlay">
+    <div class="modal-box" style="width:440px;max-width:94vw;max-height:90vh;overflow-y:auto">
+      <div class="modal-title">📂 ملف الدَّين</div>
+      <div id="debtFileBody"></div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button class="btn btn-outline" onclick="closeModal('debtFileModal')" style="flex:1;justify-content:center">إغلاق</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Quick field adder modal -->
 <div id="quickFieldModal" style="display:none">
   <div class="modal-overlay">
@@ -4782,7 +4808,7 @@ function renderTxnTable(list){
       <td>${(t.cost||0).toLocaleString()}</td>
       <td style="color:#7DCCA0">${(t.paid||0).toLocaleString()}</td>
       <td style="color:${(t.cost-t.paid)>0?'#E88080':'#7DCCA0'}">${((t.cost||0)-(t.paid||0)).toLocaleString()}</td>
-      <td><div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${stageChip(t)}${payChip(t)}</div></td>
+      <td><div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="تعديل الدفع / إضافة دفعة / سجل الدفعات">${payChip(t)}</span></div></td>
       <td><div style='display:flex;gap:3px;align-items:center;flex-wrap:nowrap'>${txnStageBtns(t)}<span style="width:1px;height:16px;background:var(--border);margin:0 1px"></span><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px' title='واتساب: استلام'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px' title='واتساب: قيد الإنجاز'>⏳</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px' title='واتساب: جاهزة'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)' title='واتساب: تم التسليم'>🤝</button><button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px' title='حذف'>🗑️</button></div></td>
     </tr>`).join('');
 }
@@ -6172,6 +6198,7 @@ function renderDebtsPage(){
           <td style="direction:ltr;text-align:right">${d.date||'—'}</td>
           <td><span class="pay-badge ${d.status==='مسدّد'?'pay-paid':d.status==='جزئي'?'pay-partial':'pay-unpaid'}">${d.status||'قائم'}</span></td>
           <td style="display:flex;gap:4px">
+            <button class="btn btn-outline" onclick="openDebtFile('${d.id}')" style="font-size:11px;padding:3px 8px;color:#88BBE8;border-color:rgba(76,139,201,0.4)" title="الملف الكامل + سجل الدفعات">📂</button>
             ${d.status!=='مسدّد'?`<button class="btn btn-green" onclick="payDebt('${d.id}')" style="font-size:11px;padding:3px 8px">تسديد</button>`:''}
             <button class="btn btn-red" onclick="deleteDebt('${d.id}')" style="font-size:11px;padding:3px 8px">🗑️</button>
           </td>
@@ -6186,6 +6213,167 @@ function openDebtModal(){
   const reason=prompt('سبب الدين:','')||'';
   debts.push({id:'d_'+Date.now(),name,amount,paid:0,remaining:amount,reason,date:todayStr(),status:'قائم'});
   saveDebts();renderDebtsPage();notify('✅ تم تسجيل الدين');
+}
+// ═══════ نظام الدفعات الموحّد + سجل الدفعات (ledger) ═══════
+// مصدر حقيقة واحد: كل الدفعات تمرّ من هنا فلا يتناقض ما تراه بالمعاملة والدَّين.
+function _linkedDebt(txnId){ return debts.find(d=>d.txnRef===txnId); }
+function applyDebtPayment(d,amount){
+  if(!d||!(amount>0))return false;
+  if(!Array.isArray(d.payments))d.payments=[];
+  d.paid=(+d.paid||0)+amount;
+  d.payments.push({amount:amount,date:todayStr(),at:Date.now()});
+  const txn=d.txnRef?transactions.find(t=>t.id===d.txnRef):null;
+  if(txn){ txn.paid=(+txn.paid||0)+amount; d.remaining=Math.max(0,(+txn.cost||0)-(+txn.paid||0)); }
+  else { d.remaining=Math.max(0,(+d.amount||0)-(+d.paid||0)); }
+  d.status=d.remaining<=0?'مسدّد':d.paid>0?'جزئي':'قائم';
+  if(txn) txn.payStatus=d.remaining<=0?'مدفوع بالكامل':'دفع جزئي';
+  cashEntries.push({id:'c_'+Date.now()+'_'+Math.floor(Math.random()*1000),type:'وارد',amount:amount,desc:'دفعة: '+(d.name||'دين')+(txn?' — معاملة #'+formatSerial(txn.serial):''),date:todayStr(),time:nowTime(),ref:d.txnRef||d.id});
+  saveDebts(); if(txn)saveTxns(); saveCash();
+  return true;
+}
+function applyPaymentToTxn(txnId,amount){
+  const txn=transactions.find(t=>t.id===txnId); if(!txn)return false;
+  let d=_linkedDebt(txnId);
+  if(!d){
+    const bal=Math.max(0,(+txn.cost||0)-(+txn.paid||0));
+    d={id:'d_'+Date.now(),txnRef:txnId,name:txn.citName||'مجهول',amount:bal>0?bal:amount,paid:0,remaining:bal,reason:'معاملة #'+formatSerial(txn.serial)+' - '+(txn.type||''),date:txn.date||todayStr(),status:'قائم',payments:[]};
+    debts.push(d);
+  }
+  return applyDebtPayment(d,amount);
+}
+function _refreshAfterPay(){
+  if(currentPage==='transactions')renderTransactionsPage();
+  else if(currentPage==='debts')renderDebtsPage();
+  else if(currentPage==='citizen_detail')renderCitizenDetail();
+  else if(currentPage==='dashboard')renderDashboard();
+  renderSideList();
+}
+// ─── محرّر الدفعة السريع (من chip الدفع في سجل المعاملات) ───
+let _payEditorTxnId=null;
+function openTxnPayEditor(txnId){
+  const t=transactions.find(x=>x.id===txnId); if(!t)return;
+  _payEditorTxnId=txnId;
+  renderTxnPayModal();
+  document.getElementById('txnPayModal').style.display='block';
+}
+function renderTxnPayModal(){
+  const t=transactions.find(x=>x.id===_payEditorTxnId); if(!t)return;
+  const d=_linkedDebt(t.id);
+  const cost=+t.cost||0, paid=+t.paid||0, rem=Math.max(0,cost-paid);
+  const p=txnPay(t);
+  const payments=(d&&Array.isArray(d.payments))?d.payments:[];
+  document.getElementById('txnPayBody').innerHTML=`
+    <div style="background:var(--navy3);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">معاملة #${formatSerial(t.serial)} — ${esc(t.citName||'—')}</div>
+        <span class="pay-badge ${p.cls}">${p.k}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text3)">${esc(t.type||'')}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+      <div style="background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:9px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px;text-align:center">التكلفة</div>
+        <input type="number" id="tpCost" value="${cost}" style="width:100%;background:var(--navy3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-weight:700;padding:4px 2px;text-align:center">
+      </div>
+      <div style="background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:9px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">المدفوع</div>
+        <div style="font-size:15px;font-weight:800;color:#7DCCA0">${paid.toLocaleString()}</div>
+      </div>
+      <div style="background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:9px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">المتبقّي</div>
+        <div style="font-size:15px;font-weight:800;color:${rem>0?'#E88080':'#7DCCA0'}">${rem.toLocaleString()}</div>
+      </div>
+    </div>
+    <button class="btn btn-outline" onclick="setTxnCost()" style="width:100%;justify-content:center;font-size:11.5px;padding:6px;margin-bottom:14px">💾 حفظ التكلفة المعدّلة</button>
+    ${rem>0?`
+    <div class="form-field" style="margin-bottom:10px">
+      <label>➕ إضافة دفعة (ل.ل)</label>
+      <div style="display:flex;gap:8px">
+        <input type="number" id="tpAmount" placeholder="0" min="0" style="flex:1;font-size:18px;font-weight:700;text-align:center;padding:10px;border:2px solid var(--border2);background:var(--navy3);border-radius:8px;color:var(--text)" onkeydown="if(event.key==='Enter')addTxnPayment()">
+        <button class="btn btn-gold" onclick="addTxnPayment()" style="padding:0 18px;font-size:13px">دفع</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn btn-outline" onclick="document.getElementById('tpAmount').value=${rem}" style="flex:1;font-size:11px;padding:5px">الكل (${rem.toLocaleString()})</button>
+        <button class="btn btn-outline" onclick="document.getElementById('tpAmount').value=${Math.round(rem/2)}" style="flex:1;font-size:11px;padding:5px">النصف</button>
+      </div>
+    </div>`:`<div style="background:rgba(76,175,122,0.1);border:1px solid rgba(76,175,122,0.3);border-radius:8px;padding:10px;text-align:center;color:#7DCCA0;font-size:13px;font-weight:700;margin-bottom:10px">✓ مدفوعة بالكامل</div>`}
+    ${payments.length?`
+    <div style="border-top:1px solid var(--border);padding-top:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--gold3);margin-bottom:6px">📜 آخر الدفعات (${payments.length})</div>
+      <div style="max-height:110px;overflow-y:auto">
+        ${payments.slice().reverse().map(pm=>`<div style="display:flex;justify-content:space-between;font-size:11.5px;padding:5px 8px;background:var(--navy2);border-radius:6px;margin-bottom:4px"><span style="color:#7DCCA0;font-weight:700">+${(pm.amount||0).toLocaleString()} ل.ل</span><span style="color:var(--text3);direction:ltr">${pm.date||''}</span></div>`).join('')}
+      </div>
+    </div>`:''}
+    ${d?`<button class="btn btn-outline" onclick="closeModal('txnPayModal');openDebtFile('${d.id}')" style="width:100%;justify-content:center;font-size:12px;padding:8px;margin-top:12px;color:#88BBE8;border-color:rgba(76,139,201,0.4)">📂 عرض ملف الدَّين الكامل ←</button>`:''}
+  `;
+}
+function addTxnPayment(){
+  const t=transactions.find(x=>x.id===_payEditorTxnId); if(!t)return;
+  const amt=parseFloat(document.getElementById('tpAmount').value)||0;
+  if(amt<=0){notify('❌ أدخل مبلغاً صحيحاً','red');return;}
+  applyPaymentToTxn(t.id,amt);
+  notify('✅ سُجّلت دفعة '+amt.toLocaleString()+' ل.ل');
+  renderTxnPayModal(); _refreshAfterPay();
+}
+function setTxnCost(){
+  const t=transactions.find(x=>x.id===_payEditorTxnId); if(!t)return;
+  const nc=parseFloat(document.getElementById('tpCost').value);
+  if(isNaN(nc)||nc<0){notify('❌ تكلفة غير صحيحة','red');return;}
+  t.cost=nc;
+  const paid=+t.paid||0;
+  t.payStatus=paid>=nc?'مدفوع بالكامل':paid>0?'دفع جزئي':'غير مدفوع';
+  const d=_linkedDebt(t.id); const rem=Math.max(0,nc-paid);
+  if(d){ d.amount=Math.max(0,nc-(paid-(+d.paid||0))); d.remaining=rem; d.status=rem<=0?'مسدّد':d.paid>0?'جزئي':'قائم'; }
+  else if(rem>0){ debts.push({id:'d_'+Date.now(),txnRef:t.id,name:t.citName||'مجهول',amount:rem,paid:0,remaining:rem,reason:'معاملة #'+formatSerial(t.serial)+' - '+(t.type||''),date:t.date||todayStr(),status:'قائم',payments:[]}); }
+  saveTxns(); saveDebts();
+  notify('💾 حُدّثت التكلفة');
+  renderTxnPayModal(); _refreshAfterPay();
+}
+// ─── ملف الدَّين الكامل (سجل الدفعات + التفاصيل) ───
+let _debtFileId=null;
+function openDebtFile(debtId){
+  _debtFileId=debtId;
+  renderDebtFile();
+  document.getElementById('debtFileModal').style.display='block';
+}
+function renderDebtFile(){
+  const d=debts.find(x=>x.id===_debtFileId); if(!d)return;
+  const t=d.txnRef?transactions.find(x=>x.id===d.txnRef):null;
+  const payments=Array.isArray(d.payments)?d.payments:[];
+  document.getElementById('debtFileBody').innerHTML=`
+    <div style="background:linear-gradient(135deg,rgba(201,76,76,0.08),rgba(201,168,76,0.06));border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:4px">${esc(d.name||'—')}</div>
+      <div style="font-size:11px;color:var(--text3)">${esc(d.reason||'')}${t?' · '+esc(t.type||''):''}</div>
+      ${t?`<div style="font-size:11px;color:var(--text3);margin-top:2px">معاملة #${formatSerial(t.serial)} · ${t.date||''} · ${stageChip(t)}</div>`:''}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+      <div style="text-align:center;background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--text3)">الأصل</div><div style="font-size:14px;font-weight:800;color:var(--text)">${(t?(+t.cost||0):(+d.amount||0)).toLocaleString()}</div></div>
+      <div style="text-align:center;background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--text3)">المدفوع</div><div style="font-size:14px;font-weight:800;color:#7DCCA0">${(t?(+t.paid||0):(+d.paid||0)).toLocaleString()}</div></div>
+      <div style="text-align:center;background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:10px"><div style="font-size:10px;color:var(--text3)">المتبقّي</div><div style="font-size:14px;font-weight:800;color:${(d.remaining||0)>0?'#E88080':'#7DCCA0'}">${(d.remaining||0).toLocaleString()}</div></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--gold3);margin-bottom:8px">📜 سجل الدفعات الكامل</div>
+    ${payments.length?`<div style="max-height:190px;overflow-y:auto;margin-bottom:14px">
+      ${payments.slice().reverse().map(pm=>`<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:8px 10px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;margin-bottom:5px">
+        <span style="color:#7DCCA0;font-weight:700">+${(pm.amount||0).toLocaleString()} ل.ل</span>
+        <span style="color:var(--text3);font-size:11px;direction:ltr">${pm.date||''}${pm.at?' · '+new Date(pm.at).toLocaleTimeString('ar-LB',{hour:'2-digit',minute:'2-digit'}):''}</span>
+      </div>`).join('')}
+    </div>`:'<div style="text-align:center;color:var(--text3);font-size:12px;padding:16px;margin-bottom:8px">لا دفعات مسجّلة بعد</div>'}
+    ${(d.remaining||0)>0?`<div class="form-field">
+      <label>➕ إضافة دفعة (ل.ل)</label>
+      <div style="display:flex;gap:8px">
+        <input type="number" id="dfAmount" placeholder="0" min="0" style="flex:1;font-size:18px;font-weight:700;text-align:center;padding:10px;border:2px solid var(--border2);background:var(--navy3);border-radius:8px;color:var(--text)" onkeydown="if(event.key==='Enter')addDebtFilePayment()">
+        <button class="btn btn-gold" onclick="addDebtFilePayment()" style="padding:0 18px;font-size:13px">دفع</button>
+      </div>
+    </div>`:`<div style="background:rgba(76,175,122,0.1);border:1px solid rgba(76,175,122,0.3);border-radius:8px;padding:10px;text-align:center;color:#7DCCA0;font-weight:700">✓ الدَّين مسدّد بالكامل</div>`}
+  `;
+}
+function addDebtFilePayment(){
+  const d=debts.find(x=>x.id===_debtFileId); if(!d)return;
+  const amt=parseFloat(document.getElementById('dfAmount').value)||0;
+  if(amt<=0){notify('❌ أدخل مبلغاً صحيحاً','red');return;}
+  applyDebtPayment(d,amt);
+  notify('✅ سُجّلت دفعة '+amt.toLocaleString()+' ل.ل'+((d.remaining||0)<=0?' — مسدّد ✓':''));
+  renderDebtFile(); _refreshAfterPay();
 }
 function payDebt(id){
   const d=debts.find(x=>x.id===id);if(!d)return;
@@ -6202,23 +6390,12 @@ function confirmPayDebt(){
   const d=debts.find(x=>x.id===id);if(!d)return;
   const amount=parseFloat(document.getElementById('payDebtAmount').value)||0;
   if(amount<=0){notify('❌ أدخل مبلغاً صحيحاً','red');return;}
-  d.paid=(d.paid||0)+amount;
-  d.remaining=Math.max(0,(d.amount||0)-d.paid);
-  d.status=d.remaining<=0?'مسدّد':d.paid>0?'جزئي':'قائم';
-  // Update linked transaction if fully paid
-  if(d.remaining<=0 && d.txnRef){
-    const txn=transactions.find(t=>t.id===d.txnRef);
-    if(txn){ txn.paid=(txn.paid||0)+amount; txn.payStatus='مدفوع بالكامل'; saveTxns(); }
-  } else if(d.txnRef){
-    const txn=transactions.find(t=>t.id===d.txnRef);
-    if(txn){ txn.paid=(txn.paid||0)+amount; txn.payStatus='دفع جزئي'; saveTxns(); }
-  }
-  cashEntries.push({id:'c_'+Date.now(),type:'وارد',amount,desc:'تسديد دين: '+d.name,date:todayStr(),time:nowTime()});
-  saveCash(); saveDebts(); closeModal('payDebtModal');
+  applyDebtPayment(d,amount); // جوهر موحّد: يسجّل الدفعة + يحدّث المعاملة + الصندوق
+  closeModal('payDebtModal');
   notify('✅ تم تسديد '+amount.toLocaleString()+' ل.ل' + (d.remaining<=0?' — الدين مسدّد بالكامل ✓':''));
-  // Refresh current page
   if(currentPage==='debts') renderDebtsPage();
   else if(currentPage==='citizen_detail') renderCitizenDetail();
+  else if(currentPage==='transactions') renderTransactionsPage();
   renderSideList();
 }
 function deleteDebt(id){if(!confirm('حذف هذا الدين؟'))return;debts=debts.filter(d=>d.id!==id);saveDebts();renderDebtsPage();}
