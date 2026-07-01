@@ -5208,6 +5208,9 @@ function renderAgentTransfer(){
   const active=ch.find(l=>l.status==='active');
   const isFirst=!active && ch.length===0;
   const currentAgentId=active?active.agentId:null;
+  // آخر مندوب استُلم منه (لإرجاع التصحيح عند الغلط)
+  const lastDone=(!active&&ch.length)?ch[ch.length-1]:null;
+  const lastAg=lastDone?agents.find(a=>a.id===lastDone.agentId):null;
   document.getElementById('agentTransferTitle').textContent=(isFirst?'🚚 تحويل لمندوب':'↪️ تحويل لمندوب آخر')+' — #'+formatSerial(t.serial);
   let chainHtml='';
   if(ch.length){
@@ -5215,7 +5218,7 @@ function renderAgentTransfer(){
       <div style="font-size:11px;font-weight:700;color:var(--gold3);margin-bottom:7px">🔗 سلسلة المناديب</div>
       ${ch.map((l,i)=>{const ag=agents.find(a=>a.id===l.agentId);const act=l.status==='active';return `<div style="display:flex;align-items:center;gap:8px;font-size:11.5px;padding:5px 0;${i>0?'border-top:1px dashed var(--border)':''}">
         <span style="width:20px;height:20px;border-radius:50%;background:${act?'rgba(224,164,76,0.2)':'rgba(76,175,122,0.15)'};color:${act?'#E0A44C':'#7DCCA0'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${act?'●':'✓'}</span>
-        <span style="flex:1;color:var(--text);font-weight:${act?'700':'400'}">${ag?esc(ag.name):'—'} ${act?'<span style="color:#E0A44C;font-size:10px">(الحالي)</span>':''}</span>
+        <span style="flex:1;color:var(--text);font-weight:${act?'700':'400'}">${ag?esc(ag.name):'—'} ${l.correction?'<span style="color:#E8804C;font-size:9.5px">🔧 تصحيح</span> ':''}${act?'<span style="color:#E0A44C;font-size:10px">(الحالي)</span>':''}</span>
         <span style="color:#E0A44C;font-weight:700">${(+l.cost||0).toLocaleString()} ل.ل</span>
       </div>`;}).join('')}
       <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:11.5px"><span style="color:var(--text3)">إجمالي التكلفة</span><strong style="color:#E0A44C">${ch.reduce((s,l)=>s+(+l.cost||0),0).toLocaleString()} ل.ل</strong></div>
@@ -5223,6 +5226,13 @@ function renderAgentTransfer(){
   }
   document.getElementById('agentTransferBody').innerHTML=`
     ${chainHtml}
+    ${lastAg?`<div style="background:rgba(232,128,76,0.08);border:1px solid rgba(232,128,76,0.3);border-radius:10px;padding:11px 12px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#E8804C;margin-bottom:4px">🔧 المعاملة فيها غلط من ${esc(lastAg.name)}؟</div>
+      <div style="font-size:10.5px;color:var(--text3);margin-bottom:8px;line-height:1.6">أرجعها له ليصحّح الغلط — <b>بدون تكلفة إضافية</b> (يُعاد تفعيل دوره بنفس تكلفته ${(+lastDone.cost||0).toLocaleString()} ل.ل، فلا يتضاعف مستحقّه).</div>
+      <button class="btn" onclick="returnTxnForCorrection('${t.id}')" style="width:100%;justify-content:center;font-size:12px;padding:7px;background:rgba(232,128,76,0.15);color:#E8804C;border:1px solid rgba(232,128,76,0.4);font-weight:700">↩️ إرجاع لـ ${esc(lastAg.name)} للتصحيح (بلا تكلفة)</button>
+      <div style="height:1px;background:var(--border);margin:11px 0 2px"></div>
+      <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">أو حوّلها لمندوب (جديد أو نفسه بمهمة جديدة) من الأسفل ↓</div>
+    </div>`:''}
     ${active?`<div style="font-size:11px;color:var(--text2);margin-bottom:10px">أكّد كم صار على المندوب الحالي فعلياً، ثم اختر المندوب الجديد.</div>
     <div class="form-field" style="margin-bottom:10px">
       <label>💵 كم صار على ${esc((agents.find(a=>a.id===active.agentId)||{}).name||'المندوب الحالي')} فعلياً؟ (ل.ل)</label>
@@ -5233,7 +5243,7 @@ function renderAgentTransfer(){
       <label>${active?'↪️ ':''}المندوب ${isFirst?'':'الجديد'}</label>
       <select id="transferAgentSel" style="width:100%;padding:9px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Cairo,sans-serif;font-size:13px;direction:rtl">
         <option value="">— اختر المندوب —</option>
-        ${agents.filter(a=>a.id!==currentAgentId).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('')}
+        ${agents.map(a=>`<option value="${a.id}">${esc(a.name)}${a.id===currentAgentId?' (الحالي)':''}</option>`).join('')}
       </select>
     </div>
     <div class="form-field">
@@ -5241,6 +5251,23 @@ function renderAgentTransfer(){
       <input type="number" id="transferCost" value="${(isFirst&&+t.buyCost)?(+t.buyCost):''}" placeholder="0" min="0" style="width:100%;padding:10px;background:var(--navy3);border:2px solid var(--border2);border-radius:8px;color:var(--text);font-size:16px;font-weight:700;text-align:center">
     </div>
   `;
+}
+// إرجاع للتصحيح: الغلط غلط المندوب — يُعاد تفعيل حلقته الأخيرة بنفس تكلفتها (لا حلقة جديدة، لا تكلفة مضاعفة)
+function returnTxnForCorrection(txnId){
+  const t=transactions.find(x=>x.id===txnId); if(!t)return;
+  const ch=_txnChain(t);
+  if(ch.find(l=>l.status==='active')){notify('المعاملة أصلاً عند مندوب','warn');return;}
+  const last=ch.length?ch[ch.length-1]:null;
+  if(!last){notify('لا يوجد مندوب سابق لهذه المعاملة','warn');return;}
+  const ag=agents.find(a=>a.id===last.agentId);
+  last.status='active'; delete last.doneAt; last.correction=true; // نفس الحلقة، نفس التكلفة
+  t.agentId=last.agentId; t.stage='عند المندوب'; t.stageAt=Date.now();
+  if(!Array.isArray(t.stageLog))t.stageLog=[];
+  t.stageLog.push({s:'عند المندوب',at:Date.now(),ag:(ag?ag.name:''),note:'إرجاع للتصحيح'});
+  saveTxns();
+  closeModal('agentTransferModal');
+  notify('↩️ أُرجعت #'+formatSerial(t.serial)+' إلى '+(ag?ag.name:'المندوب')+' للتصحيح — بلا تكلفة إضافية');
+  _reRenderTxnViews();
 }
 function confirmAgentTransfer(){
   const t=transactions.find(x=>x.id===_transferTxnId); if(!t)return;
