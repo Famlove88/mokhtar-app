@@ -734,7 +734,7 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
       <div class="sidebar-search"><input type="text" placeholder="بحث سريع..." oninput="sideSearch(this.value)"><span class="s-ico">🔍</span></div>
       <div class="cit-list" id="sideList"></div>
       <button class="add-cit-btn" onclick="openAddModal()">+ إضافة مواطن</button>
-      <div class="sidebar-bottom"><div id="imgStatsBar" onclick="showGitHubSetup()" style="cursor:pointer;font-size:10px;color:var(--text3);text-align:center;margin-bottom:4px;padding:4px 6px;background:var(--navy3);border-radius:6px" title="إعدادات مزامنة الصور">⏳ ...</div><div class="sidebar-version">النسخة 3.2 · 2025 · GitHub Sync</div></div>
+      <div class="sidebar-bottom"><div id="imgStatsBar" onclick="showGitHubSetup()" style="cursor:pointer;font-size:10px;color:var(--text3);text-align:center;margin-bottom:4px;padding:4px 6px;background:var(--navy3);border-radius:6px" title="إعدادات مزامنة الصور">⏳ ...</div><div class="sidebar-version" id="appVersionLine">الإصدار Build 25 · 2026-07-01</div></div>
     </div>
     <div class="main-panel" id="mainPanel"></div>
   </div>
@@ -1366,8 +1366,9 @@ async function wipeAllData(){
   setTimeout(function(){ try{location.reload();}catch(_e){} }, 1000);
 }
 function exportAllData(){
-  const data={_app:'mokhtar',_ver:'files-v1',_date:new Date().toISOString(),
-    citizens,extraFields,fieldLayout,forms,textForms,transactions,debts,stamps,cashEntries,serviceTypes,stampCategories,stampGroups,waTemplates,agents,compoundTxns,affidavits};
+  const data={_app:'mokhtar',_ver:'files-v2',_build:APP_BUILD,_date:new Date().toISOString(),
+    citizens,extraFields,fieldLayout,forms,textForms,transactions,debts,stamps,cashEntries,serviceTypes,stampCategories,stampGroups,waTemplates,agents,compoundTxns,affidavits,
+    userPerms:userPerms||{},extraUsers:extraUsers||{}};
   try{
     const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
     const url=URL.createObjectURL(blob);
@@ -1385,11 +1386,26 @@ function importAllData(input){
   r.onload=function(){
     try{
       const d=JSON.parse(r.result);
+      if(!d||d._app!=='mokhtar'){ notify('❌ هذا ليس ملف نسخة احتياطية لهذا البرنامج','red'); return; }
       const keys=['citizens','extraFields','fieldLayout','forms','textForms','transactions','debts','stamps','cashEntries','serviceTypes','stampCategories','stampGroups','waTemplates','agents','compoundTxns','affidavits'];
       keys.forEach(k=>{ if(Array.isArray(d[k])) window[k]=d[k]; });
-      try{saveC();saveEF();saveFieldLayout();saveForms();saveTextForms();}catch(_e){}
-      try{if(typeof saveAll==='function')saveAll();}catch(_e){}
-      notify('✅ تم الاستيراد — جارٍ إعادة التحميل'); setTimeout(()=>location.reload(),900);
+      if(d.userPerms&&typeof d.userPerms==='object') userPerms=d.userPerms;   // استرجاع الصلاحيات
+      if(d.extraUsers&&typeof d.extraUsers==='object') extraUsers=d.extraUsers; // استرجاع المستخدمين
+      // حفظ كل شيء محلياً (كل مصفوفة بمفتاحها الصحيح)
+      try{
+        localStorage.setItem(SK,JSON.stringify(citizens)); localStorage.setItem(EK,JSON.stringify(extraFields));
+        localStorage.setItem(FLK,JSON.stringify(fieldLayout)); localStorage.setItem(FK,JSON.stringify(forms));
+        localStorage.setItem(TFK,JSON.stringify(textForms)); localStorage.setItem(TK,JSON.stringify(transactions));
+        localStorage.setItem(DK,JSON.stringify(debts)); localStorage.setItem(STK,JSON.stringify(stamps));
+        localStorage.setItem(CK,JSON.stringify(cashEntries)); localStorage.setItem(SVCK,JSON.stringify(serviceTypes));
+        localStorage.setItem(STCK,JSON.stringify(stampCategories)); localStorage.setItem(SGK,JSON.stringify(stampGroups));
+        localStorage.setItem(WAK,JSON.stringify(waTemplates)); localStorage.setItem(AGK,JSON.stringify(agents));
+        localStorage.setItem(CTK,JSON.stringify(compoundTxns)); localStorage.setItem(AFK,JSON.stringify(affidavits));
+        localStorage.setItem(PKK,JSON.stringify(userPerms)); localStorage.setItem(UKK,JSON.stringify(extraUsers));
+      }catch(_e){}
+      // رفع للمزامنة إن كانت متصلة
+      try{ if(window._fbReady){ [ [SK,citizens],[EK,extraFields],[FLK,fieldLayout],[FK,forms],[TFK,textForms],[TK,transactions],[DK,debts],[STK,stamps],[CK,cashEntries],[SVCK,serviceTypes],[STCK,stampCategories],[SGK,stampGroups],[WAK,waTemplates],[AGK,agents],[CTK,compoundTxns],[AFK,affidavits],[PKK,userPerms],[UKK,extraUsers] ].forEach(p=>_fbSet(p[0],p[1])); } }catch(_e){}
+      notify('✅ تم الاستيراد الكامل (بيانات + صلاحيات + مستخدمين) — جارٍ إعادة التحميل'); setTimeout(()=>location.reload(),900);
     }catch(e){ notify('❌ ملف غير صالح','red'); }
   };
   r.readAsText(file); input.value='';
@@ -1406,7 +1422,9 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
+const APP_BUILD='Build 25 · 2026-07-01'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
+try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;});}catch(_e){}
 const SERIAL_START=26112;
 // permissions & users
 let userPerms={};   // {username: {page:bool,...}}
@@ -1778,6 +1796,7 @@ const ALL_PAGES=[
   {key:'transactions',label:'المعاملات',ico:'📑'},
   {key:'forms',label:'النماذج',ico:'📋'},
   {key:'textforms',label:'نماذج نصية',ico:'📃'},
+  {key:'affidavits',label:'الإفادات',ico:'📜'},
   {key:'formbuilder',label:'بناء نموذج',ico:'🔧'},
   {key:'extrafields',label:'حقول مخصصة',ico:'➕'},
   {key:'fieldmanager',label:'ترتيب الحقول',ico:'🔀'},
@@ -3127,7 +3146,7 @@ function calcCtxnTotals(){
   document.getElementById('ctProfit').style.color=profit>=0?'#7DCCA0':'#E88080';
 }
 
-function saveCompoundTxn(){
+function saveCompoundTxnLegacy(){ // نسخة صفحة "المعاملات المركبة" القديمة (حقول ct*) — أُعيدت تسميتها لفكّ التعارض
   const citName=document.getElementById('ctCitName').value.trim();
   if(!citName){notify('❌ أدخل اسم المواطن','red');return;}
   if(!_ctxnItems.length){notify('❌ أضف بنداً واحداً على الأقل','red');return;}
@@ -7355,542 +7374,6 @@ function printStampsReport(){
     +'<table><thead><tr><th>النوع<\/th><th>الكمية<\/th><th>السعر<\/th><th>الإجمالي<\/th><th>التاريخ<\/th><\/tr><\/thead><tbody>'+rows+'<\/tbody><\/table><\/body><\/html>');
   w.document.close();setTimeout(()=>w.print(),300);
 }
-// ===== STAMPS PAGE =====
-// ===== STAMPS - VISUAL CARD SYSTEM =====
-
-function getGroupStock(gid,iid){
-  const b=stamps.filter(s=>s.type==='شراء'&&s.groupId===gid&&s.itemId===iid).reduce((a,s)=>a+(parseInt(s.qty)||0),0);
-  const sl=stamps.filter(s=>s.type==='بيع'&&s.groupId===gid&&s.itemId===iid).reduce((a,s)=>a+(parseInt(s.qty)||0),0);
-  return{bought:b,sold:sl,stock:b-sl};
-}
-
-function renderStampsPage(){
-  var mp=document.getElementById('mainPanel');
-  var tRev=stamps.filter(function(s){return s.type==='بيع';}).reduce(function(a,s){return a+(parseFloat(s.total)||0);},0);
-  var tCost=stamps.filter(function(s){return s.type==='شراء';}).reduce(function(a,s){return a+(parseFloat(s.total)||0);},0);
-  var tStock=0;
-  stampGroups.forEach(function(g){g.items.forEach(function(it){tStock+=getGroupStock(g.id,it.id).stock;});});
-
-  var groupsHtml='';
-  stampGroups.forEach(function(g){
-    var gS=0,gRev=0,gCost=0;
-    g.items.forEach(function(it){
-      var st=getGroupStock(g.id,it.id);
-      gS+=st.stock;
-      gRev+=stamps.filter(function(s){return s.type==='بيع'&&s.groupId===g.id&&s.itemId===it.id;}).reduce(function(a,s){return a+(parseFloat(s.total)||0);},0);
-      gCost+=stamps.filter(function(s){return s.type==='شراء'&&s.groupId===g.id&&s.itemId===it.id;}).reduce(function(a,s){return a+(parseFloat(s.total)||0);},0);
-    });
-    var itemCards='';
-    if(!g.items.length){
-      itemCards='<div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--text3);font-size:12px">لا أصناف — أضف صنفاً</div>';
-    } else {
-      g.items.forEach(function(it){
-        var st=getGroupStock(g.id,it.id);
-        var clr=st.stock>0?'#7DCCA0':st.stock===0?'#888':'#E88080';
-        var imgH=it.image
-          ?('<img src="'+resolveImg(it.image)+'" style="width:100%;height:80px;object-fit:cover;border-radius:6px;margin-bottom:8px">')
-          :('<div style="width:100%;height:70px;background:var(--navy3);border-radius:6px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--gold);opacity:0.5">🪙</div>');
-        var disAttr=st.stock<=0?' disabled':'';
-        itemCards+=
-          '<div class="stamp-item-card">'+imgH
-          +'<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px;text-align:center">'+it.name+'</div>'
-          +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:8px">'
-          +'<span>شراء: '+(it.buyPrice||0).toLocaleString()+'</span><span>بيع: '+(it.sellPrice||0).toLocaleString()+'</span></div>'
-          +'<div style="text-align:center;margin-bottom:10px">'
-          +'<span style="font-size:22px;font-weight:900;color:'+clr+'">'+st.stock+'</span>'
-          +'<span style="font-size:10px;color:var(--text3);display:block">طابع متبقي</span></div>'
-          +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">'
-          +'<button class="stamp-sell-btn"'+disAttr+' onclick="stampOp(\''+g.id+'\',\''+it.id+'\',\'بيع\')">💸 بيع</button>'
-          +'<button class="stamp-buy-btn" onclick="stampOp(\''+g.id+'\',\''+it.id+'\',\'شراء\')">📦 شراء</button>'
-          +'</div>'
-          +'<div style="display:flex;gap:4px;margin-top:5px">'
-          +'<button class="btn btn-blue" onclick="editStampItem(\''+g.id+'\',\''+it.id+'\')" style="flex:1;font-size:10px;padding:3px">✏️ تعديل</button>'
-          +'<button class="btn btn-red" onclick="delStampItem(\''+g.id+'\',\''+it.id+'\')" style="flex:1;font-size:10px;padding:3px">🗑️</button>'
-          +'</div></div>';
-      });
-    }
-    groupsHtml+=
-      '<div style="background:var(--navy2);border:1px solid var(--border);border-radius:14px;margin-bottom:18px;overflow:hidden">'
-      +'<div style="padding:14px 18px;background:var(--navy3);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">'
-      +'<div style="display:flex;align-items:center;gap:12px"><span style="font-size:24px">🗂️</span>'
-      +'<div><div style="font-size:15px;font-weight:700;color:var(--gold)">'+g.name+'</div>'
-      +'<div style="font-size:11px;color:var(--text3)">'+g.items.length+' صنف · مخزون: '+gS+' · ربح: '+(gRev-gCost).toLocaleString()+' ل.ل</div>'
-      +'</div></div>'
-      +'<div style="display:flex;gap:6px">'
-      +'<button class="btn btn-green" onclick="addStampItem(\''+g.id+'\')" style="font-size:12px;padding:6px 14px">+ صنف جديد</button>'
-      +'<button class="btn btn-red" onclick="delStampGroup(\''+g.id+'\')" style="font-size:12px;padding:6px 12px">🗑️</button>'
-      +'</div></div>'
-      +'<div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px">'
-      +itemCards+'</div></div>';
-  });
-
-  var hist='';
-  var sliced=stamps.slice(-15).reverse();
-  sliced.forEach(function(s){
-    hist+='<tr>'
-      +'<td><span class="pay-badge '+(s.type==='شراء'?'pay-partial':'pay-paid')+'">'+s.type+'</span></td>'
-      +'<td>'+(s.groupName||'—')+'</td>'
-      +'<td style="font-weight:600;color:var(--text)">'+(s.itemName||'—')+'</td>'
-      +'<td style="font-weight:700">'+(s.qty||0)+'</td>'
-      +'<td>'+(s.unitPrice||0).toLocaleString()+'</td>'
-      +'<td style="font-weight:700;color:'+(s.type==='بيع'?'#7DCCA0':'#E88080')+'">'+(s.total||0).toLocaleString()+'</td>'
-      +'<td>'+(s.date||'—')+'</td>'
-      +'<td><button class="btn btn-red" onclick="delStamp(\''+s.id+'\')" style="font-size:11px;padding:3px 7px">🗑️</button></td>'
-      +'</tr>';
-  });
-  if(!hist) hist='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text3)">لا حركات بعد</td></tr>';
-
-  var emptyHtml=stampGroups.length===0
-    ?'<div class="empty-state"><div class="e-icon">🪙</div><h3>لا فئات بعد</h3><button class="btn btn-gold" onclick="addStampGroup()" style="margin-top:12px">+ فئة جديدة</button></div>'
-    :groupsHtml;
-
-  mp.innerHTML=
-    '<div class="page-header">'
-    +'<div><div class="page-title">🪙 الطوابع</div><div class="page-sub">إدارة فئات وأصناف الطوابع</div></div>'
-    +'<div class="page-actions">'
-    +'<button class="btn btn-green" onclick="addStampGroup()">+ فئة جديدة</button>'
-    +'<button class="btn btn-outline" onclick="printStampsReport()">🖨️ تقرير</button>'
-    +'</div></div>'
-    +'<div class="panel-content">'
-    +'<div class="dash-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">'
-    +'<div class="stat-card gold" style="padding:12px"><div class="sc-label">إجمالي المخزون</div><div class="sc-value" style="font-size:26px">'+tStock+'</div><div class="sc-sub">طابع</div></div>'
-    +'<div class="stat-card blue" style="padding:12px"><div class="sc-label">عدد الفئات</div><div class="sc-value" style="font-size:26px">'+stampGroups.length+'</div></div>'
-    +'<div class="stat-card green" style="padding:12px"><div class="sc-label">إيرادات البيع</div><div class="sc-value" style="font-size:18px">'+tRev.toLocaleString()+'</div><div class="sc-sub">ل.ل</div></div>'
-    +'<div class="stat-card purple" style="padding:12px"><div class="sc-label">الربح الصافي</div><div class="sc-value" style="font-size:18px;color:#7DCCA0">'+(tRev-tCost).toLocaleString()+'</div><div class="sc-sub">ل.ل</div></div>'
-    +'</div>'+emptyHtml
-    +'<div class="recent-card" style="margin-top:14px">'
-    +'<div class="recent-header"><h3>آخر الحركات</h3></div>'
-    +'<table class="rtable"><thead><tr><th>النوع</th><th>الفئة</th><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th><th>التاريخ</th><th></th></tr></thead>'
-    +'<tbody>'+hist+'</tbody></table></div></div>';
-}
-
-function addStampGroup(){
-  document.getElementById('sgName').value='';
-  document.getElementById('stampGroupModal').style.display='block';
-  setTimeout(()=>document.getElementById('sgName').focus(),100);
-}
-function saveStampGroup(){
-  const n=document.getElementById('sgName').value.trim();
-  if(!n){notify('❌ أدخل اسم الفئة','red');return;}
-  stampGroups.push({id:'sg_'+Date.now(),name:n,items:[]});
-  saveStampGroups();closeModal('stampGroupModal');renderStampsPage();notify('✅ تمت إضافة الفئة: '+n);
-}
-function delStampGroup(gid){
-  if(!confirm('حذف هذه الفئة وكل أصنافها؟'))return;
-  stampGroups=stampGroups.filter(g=>g.id!==gid);
-  saveStampGroups();renderStampsPage();
-}
-function addStampItem(gid){
-  document.getElementById('siGid').value=gid;
-  const g=stampGroups.find(x=>x.id===gid);
-  document.getElementById('siGroupName').textContent=g?g.name:'';
-  document.getElementById('siName').value='';
-  document.getElementById('siBuy').value='';
-  document.getElementById('siSell').value='';
-  document.getElementById('siImgPreview').style.display='none';
-  document.getElementById('siImgData').value='';
-  document.getElementById('stampItemModal').style.display='block';
-  setTimeout(()=>document.getElementById('siName').focus(),100);
-}
-function editStampItem(gid,iid){
-  const g=stampGroups.find(x=>x.id===gid),it=g?g.items.find(x=>x.id===iid):null;
-  if(!g||!it)return;
-  document.getElementById('siGid').value=gid+'|'+iid;
-  document.getElementById('siGroupName').textContent=g.name;
-  document.getElementById('siName').value=it.name;
-  document.getElementById('siBuy').value=it.buyPrice||0;
-  document.getElementById('siSell').value=it.sellPrice||0;
-  const prev=document.getElementById('siImgPreview');
-  if(it.image){prev.src=resolveImg(it.image);prev.style.display='block';}else prev.style.display='none';
-  document.getElementById('siImgData').value=it.image||'';
-  document.getElementById('stampItemModal').style.display='block';
-}
-function siUploadImg(e){
-  const file=e.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=async ev=>{
-    try {
-      // ✅ حفظ الصورة في IndexedDB واستخدام مرجع
-      const imgRef=await saveImgToIdb(ev.target.result,'stamp',null);
-      document.getElementById('siImgData').value=imgRef;
-      const prev=document.getElementById('siImgPreview');
-      prev.src=ev.target.result; prev.style.display='block';
-    } catch(err){
-      console.error('IDB save failed:',err);
-      notify('❌ فشل حفظ الصورة محلياً','red');
-    }
-  };
-  reader.readAsDataURL(file);
-}
-function saveStampItem(){
-  const raw=document.getElementById('siGid').value;
-  const parts=raw.split('|'); const gid=parts[0], iid=parts[1]||null;
-  const g=stampGroups.find(x=>x.id===gid);if(!g)return;
-  const n=document.getElementById('siName').value.trim();
-  if(!n){notify('❌ أدخل اسم الصنف','red');return;}
-  const bp=parseFloat(document.getElementById('siBuy').value)||0;
-  const sp=parseFloat(document.getElementById('siSell').value)||bp;
-  const img=document.getElementById('siImgData').value||null;
-  if(iid){
-    const it=g.items.find(x=>x.id===iid);
-    if(it){it.name=n;it.buyPrice=bp;it.sellPrice=sp;if(img)it.image=img;}
-    saveStampGroups();closeModal('stampItemModal');renderStampsPage();notify('✅ تم تعديل الصنف: '+n);
-  } else {
-    g.items.push({id:'si_'+Date.now(),name:n,buyPrice:bp,sellPrice:sp,image:img});
-    saveStampGroups();closeModal('stampItemModal');renderStampsPage();notify('✅ تمت إضافة الصنف: '+n);
-  }
-}
-function delStampItem(gid,iid){
-  if(!confirm('حذف هذا الصنف؟'))return;
-  const g=stampGroups.find(x=>x.id===gid);if(!g)return;
-  g.items=g.items.filter(i=>i.id!==iid);
-  saveStampGroups();renderStampsPage();
-}
-function stampOp(gid,iid,type){
-  const g=stampGroups.find(x=>x.id===gid),it=g?g.items.find(x=>x.id===iid):null;if(!g||!it)return;
-  if(type==='بيع'&&getGroupStock(gid,iid).stock<=0){notify('⚠️ لا مخزون من هذا الصنف','warn');return;}
-  _stampModalType=type;
-  document.getElementById('stampModalTitle').textContent=(type==='شراء'?'📦 شراء — ':'💸 بيع — ')+it.name;
-  const gs=document.getElementById('stGroupSel');
-  gs.innerHTML=stampGroups.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
-  gs.value=gid;gs.disabled=true;
-  _loadStampItems(gid,iid);
-  document.getElementById('stUnitPrice').value=(type==='شراء'?it.buyPrice:it.sellPrice)||0;
-  document.getElementById('stQty').value='';calcStampTotal();
-  document.getElementById('stampModal').style.display='block';
-}
-function openStampModal(type){
-  _stampModalType=type;
-  document.getElementById('stampModalTitle').textContent=(type==='شراء'?'📦 شراء طوابع':'💸 بيع طوابع');
-  const gs=document.getElementById('stGroupSel');
-  gs.innerHTML='<option value="">— اختر الفئة —</option>'+stampGroups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
-  gs.disabled=false;
-  const is=document.getElementById('stItemSel');is.innerHTML='<option value="">— اختر الصنف —</option>';is.disabled=true;
-  ['stQty','stUnitPrice','stTotal','stDesc'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('stampModal').style.display='block';
-}
-function _loadStampItems(gid,selId){
-  const g=stampGroups.find(x=>x.id===gid),sel=document.getElementById('stItemSel');
-  if(!g||!g.items.length){sel.innerHTML='<option value="">لا أصناف</option>';sel.disabled=true;return;}
-  sel.innerHTML='<option value="">— اختر الصنف —</option>'+g.items.map(it=>`<option value="${it.id}">${it.name}</option>`).join('');
-  if(selId)sel.value=selId;sel.disabled=false;
-}
-function onStampGroupChange(){
-  const gid=document.getElementById('stGroupSel').value;
-  if(!gid){const is=document.getElementById('stItemSel');is.innerHTML='<option value="">—</option>';is.disabled=true;return;}
-  _loadStampItems(gid,null);document.getElementById('stUnitPrice').value='';document.getElementById('stTotal').value='';
-}
-function onStampItemChange(){
-  const gid=document.getElementById('stGroupSel').value,iid=document.getElementById('stItemSel').value;
-  const g=stampGroups.find(x=>x.id===gid),it=g?g.items.find(x=>x.id===iid):null;if(!it)return;
-  document.getElementById('stUnitPrice').value=(_stampModalType==='شراء'?it.buyPrice:it.sellPrice)||0;calcStampTotal();
-}
-function saveStampEntry(){
-  const gs=document.getElementById('stGroupSel'),is=document.getElementById('stItemSel');gs.disabled=false;
-  const gid=gs.value,iid=is.value;
-  const g=stampGroups.find(x=>x.id===gid),it=g?g.items.find(x=>x.id===iid):null;
-  if(!g){notify('❌ اختر الفئة','red');return;}if(!it){notify('❌ اختر الصنف','red');return;}
-  const qty=parseInt(document.getElementById('stQty').value)||0;if(qty<=0){notify('❌ أدخل الكمية','red');return;}
-  const up=parseFloat(document.getElementById('stUnitPrice').value)||0;if(up<=0){notify('❌ أدخل السعر','red');return;}
-  const type=_stampModalType;
-  if(type==='بيع'&&getGroupStock(gid,iid).stock<qty){notify('⚠️ المخزون المتاح: '+getGroupStock(gid,iid).stock,'warn');return;}
-  const total=qty*up;
-  stamps.push({id:'s_'+Date.now(),type,groupId:gid,groupName:g.name,itemId:iid,itemName:it.name,qty,unitPrice:up,total,desc:document.getElementById('stDesc').value.trim(),date:todayStr(),time:nowTime()});
-  saveStamps();
-  cashEntries.push({id:'c_'+Date.now(),type:(type==='بيع'?'وارد':'صادر'),amount:total,desc:(type==='بيع'?'بيع ':'شراء ')+qty+' '+it.name+' ('+g.name+')',date:todayStr(),time:nowTime()});
-  saveCash();is.disabled=false;closeModal('stampModal');renderStampsPage();notify('✅ تم تسجيل '+type+' '+qty+' '+it.name);
-}
-function delStamp(id){if(!confirm('حذف؟'))return;stamps=stamps.filter(s=>s.id!==id);saveStamps();renderStampsPage();}
-function printStampsReport(){
-  let rows='';
-  stampGroups.forEach(g=>g.items.forEach(it=>{
-    const st=getGroupStock(g.id,it.id);
-    rows+='<tr style="background:#f0f0f0"><td colspan="5" style="font-weight:bold;padding:6px">'+g.name+' — '+it.name+' (متبقي: '+st.stock+')</td></tr>';
-    stamps.filter(s=>s.groupId===g.id&&s.itemId===it.id).forEach(s=>{
-      rows+='<tr><td>'+s.type+'</td><td>'+s.qty+'</td><td>'+(s.unitPrice||0).toLocaleString()+'</td><td>'+(s.total||0).toLocaleString()+'</td><td>'+(s.date||'—')+'</td></tr>';
-    });
-  }));
-  const tRev=stamps.filter(s=>s.type==='بيع').reduce((a,s)=>a+(parseFloat(s.total)||0),0);
-  const tCost=stamps.filter(s=>s.type==='شراء').reduce((a,s)=>a+(parseFloat(s.total)||0),0);
-  const w=window.open('','_blank');
-  w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير الطوابع<\/title>'
-    +'<style>body{font-family:Arial;padding:20px;direction:rtl}table{width:100%;border-collapse:collapse;font-size:12px}'
-    +'th{background:#0B1426;color:#C9A84C;padding:7px;text-align:right}td{padding:5px 8px;border-bottom:1px solid #eee}'
-    +'.noprint{margin-bottom:10px}@media print{.noprint{display:none}}<\/style><\/head><body>'
-    +'<div class="noprint"><button onclick="window.print()" style="padding:7px 16px;background:#C9A84C;color:#111;border:none;border-radius:5px;cursor:pointer">طباعة<\/button><\/div>'
-    +'<h2>تقرير الطوابع — '+new Date().toLocaleDateString('ar-LB')+'<\/h2>'
-    +'<p><strong>إيرادات: '+tRev.toLocaleString()+' | تكلفة: '+tCost.toLocaleString()+' | ربح: '+(tRev-tCost).toLocaleString()+' ل.ل<\/strong><\/p>'
-    +'<table><thead><tr><th>النوع<\/th><th>الكمية<\/th><th>السعر<\/th><th>الإجمالي<\/th><th>التاريخ<\/th><\/tr><\/thead><tbody>'+rows+'<\/tbody><\/table><\/body><\/html>');
-  w.document.close();setTimeout(()=>w.print(),300);
-}
-// ===== STAMPS PAGE =====
-// ===== STAMPS - VISUAL CARD SYSTEM =====
-
-function getGroupStock(gid,iid){
-  const b=stamps.filter(s=>s.type==='شراء'&&s.groupId===gid&&s.itemId===iid).reduce((a,s)=>a+(parseInt(s.qty)||0),0);
-  const sl=stamps.filter(s=>s.type==='بيع'&&s.groupId===gid&&s.itemId===iid).reduce((a,s)=>a+(parseInt(s.qty)||0),0);
-  return{bought:b,sold:sl,stock:b-sl};
-}
-
-function renderStampsPage(){
-  var mp=document.getElementById('mainPanel');
-  var tRev=stamps.filter(function(s){return s.type==='بيع';}).reduce(function(a,s){return a+(parseFloat(s.total)||0);},0);
-  var tCost=stamps.filter(function(s){return s.type==='شراء';}).reduce(function(a,s){return a+(parseFloat(s.total)||0);},0);
-  var tStock=0;
-  stampGroups.forEach(function(g){g.items.forEach(function(it){tStock+=getGroupStock(g.id,it.id).stock;});});
-
-  var groupsHtml='';
-  stampGroups.forEach(function(g){
-    var gS=0,gRev=0,gCost=0;
-    g.items.forEach(function(it){
-      var st=getGroupStock(g.id,it.id);
-      gS+=st.stock;
-      gRev+=stamps.filter(function(s){return s.type==='بيع'&&s.groupId===g.id&&s.itemId===it.id;}).reduce(function(a,s){return a+(parseFloat(s.total)||0);},0);
-      gCost+=stamps.filter(function(s){return s.type==='شراء'&&s.groupId===g.id&&s.itemId===it.id;}).reduce(function(a,s){return a+(parseFloat(s.total)||0);},0);
-    });
-    var itemCards='';
-    if(!g.items.length){
-      itemCards='<div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--text3);font-size:12px">لا أصناف — أضف صنفاً</div>';
-    } else {
-      g.items.forEach(function(it){
-        var st=getGroupStock(g.id,it.id);
-        var clr=st.stock>0?'#7DCCA0':st.stock===0?'#888':'#E88080';
-        var imgH=it.image
-          ?('<img src="'+resolveImg(it.image)+'" style="width:100%;height:80px;object-fit:cover;border-radius:6px;margin-bottom:8px">')
-          :('<div style="width:100%;height:70px;background:var(--navy3);border-radius:6px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--gold);opacity:0.5">🪙</div>');
-        var disAttr=st.stock<=0?' disabled':'';
-        itemCards+=
-          '<div class="stamp-item-card">'+imgH
-          +'<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px;text-align:center">'+it.name+'</div>'
-          +'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:8px">'
-          +'<span>شراء: '+(it.buyPrice||0).toLocaleString()+'</span><span>بيع: '+(it.sellPrice||0).toLocaleString()+'</span></div>'
-          +'<div style="text-align:center;margin-bottom:10px">'
-          +'<span style="font-size:22px;font-weight:900;color:'+clr+'">'+st.stock+'</span>'
-          +'<span style="font-size:10px;color:var(--text3);display:block">طابع متبقي</span></div>'
-          +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">'
-          +'<button class="stamp-sell-btn"'+disAttr+' onclick="stampOp(\''+g.id+'\',\''+it.id+'\',\'بيع\')">💸 بيع</button>'
-          +'<button class="stamp-buy-btn" onclick="stampOp(\''+g.id+'\',\''+it.id+'\',\'شراء\')">📦 شراء</button>'
-          +'</div>'
-          +'<div style="display:flex;gap:4px;margin-top:5px">'
-          +'<button class="btn btn-blue" onclick="editStampItem(\''+g.id+'\',\''+it.id+'\')" style="flex:1;font-size:10px;padding:3px">✏️ تعديل</button>'
-          +'<button class="btn btn-red" onclick="delStampItem(\''+g.id+'\',\''+it.id+'\')" style="flex:1;font-size:10px;padding:3px">🗑️</button>'
-          +'</div></div>';
-      });
-    }
-    groupsHtml+=
-      '<div style="background:var(--navy2);border:1px solid var(--border);border-radius:14px;margin-bottom:18px;overflow:hidden">'
-      +'<div style="padding:14px 18px;background:var(--navy3);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">'
-      +'<div style="display:flex;align-items:center;gap:12px"><span style="font-size:24px">🗂️</span>'
-      +'<div><div style="font-size:15px;font-weight:700;color:var(--gold)">'+g.name+'</div>'
-      +'<div style="font-size:11px;color:var(--text3)">'+g.items.length+' صنف · مخزون: '+gS+' · ربح: '+(gRev-gCost).toLocaleString()+' ل.ل</div>'
-      +'</div></div>'
-      +'<div style="display:flex;gap:6px">'
-      +'<button class="btn btn-green" onclick="addStampItem(\''+g.id+'\')" style="font-size:12px;padding:6px 14px">+ صنف جديد</button>'
-      +'<button class="btn btn-red" onclick="delStampGroup(\''+g.id+'\')" style="font-size:12px;padding:6px 12px">🗑️</button>'
-      +'</div></div>'
-      +'<div style="padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px">'
-      +itemCards+'</div></div>';
-  });
-
-  var hist='';
-  var sliced=stamps.slice(-15).reverse();
-  sliced.forEach(function(s){
-    hist+='<tr>'
-      +'<td><span class="pay-badge '+(s.type==='شراء'?'pay-partial':'pay-paid')+'">'+s.type+'</span></td>'
-      +'<td>'+(s.groupName||'—')+'</td>'
-      +'<td style="font-weight:600;color:var(--text)">'+(s.itemName||'—')+'</td>'
-      +'<td style="font-weight:700">'+(s.qty||0)+'</td>'
-      +'<td>'+(s.unitPrice||0).toLocaleString()+'</td>'
-      +'<td style="font-weight:700;color:'+(s.type==='بيع'?'#7DCCA0':'#E88080')+'">'+(s.total||0).toLocaleString()+'</td>'
-      +'<td>'+(s.date||'—')+'</td>'
-      +'<td><button class="btn btn-red" onclick="delStamp(\''+s.id+'\')" style="font-size:11px;padding:3px 7px">🗑️</button></td>'
-      +'</tr>';
-  });
-  if(!hist) hist='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text3)">لا حركات بعد</td></tr>';
-
-  var emptyHtml=stampGroups.length===0
-    ?'<div class="empty-state"><div class="e-icon">🪙</div><h3>لا فئات بعد</h3><button class="btn btn-gold" onclick="addStampGroup()" style="margin-top:12px">+ فئة جديدة</button></div>'
-    :groupsHtml;
-
-  mp.innerHTML=
-    '<div class="page-header">'
-    +'<div><div class="page-title">🪙 الطوابع</div><div class="page-sub">إدارة فئات وأصناف الطوابع</div></div>'
-    +'<div class="page-actions">'
-    +'<button class="btn btn-green" onclick="addStampGroup()">+ فئة جديدة</button>'
-    +'<button class="btn btn-outline" onclick="printStampsReport()">🖨️ تقرير</button>'
-    +'</div></div>'
-    +'<div class="panel-content">'
-    +'<div class="dash-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:20px">'
-    +'<div class="stat-card gold" style="padding:12px"><div class="sc-label">إجمالي المخزون</div><div class="sc-value" style="font-size:26px">'+tStock+'</div><div class="sc-sub">طابع</div></div>'
-    +'<div class="stat-card blue" style="padding:12px"><div class="sc-label">عدد الفئات</div><div class="sc-value" style="font-size:26px">'+stampGroups.length+'</div></div>'
-    +'<div class="stat-card green" style="padding:12px"><div class="sc-label">إيرادات البيع</div><div class="sc-value" style="font-size:18px">'+tRev.toLocaleString()+'</div><div class="sc-sub">ل.ل</div></div>'
-    +'<div class="stat-card purple" style="padding:12px"><div class="sc-label">الربح الصافي</div><div class="sc-value" style="font-size:18px;color:#7DCCA0">'+(tRev-tCost).toLocaleString()+'</div><div class="sc-sub">ل.ل</div></div>'
-    +'</div>'+emptyHtml
-    +'<div class="recent-card" style="margin-top:14px">'
-    +'<div class="recent-header"><h3>آخر الحركات</h3></div>'
-    +'<table class="rtable"><thead><tr><th>النوع</th><th>الفئة</th><th>الصنف</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th><th>التاريخ</th><th></th></tr></thead>'
-    +'<tbody>'+hist+'</tbody></table></div></div>';
-}
-
-function addStampGroup(){
-  document.getElementById('sgName').value='';
-  document.getElementById('stampGroupModal').style.display='block';
-  setTimeout(()=>document.getElementById('sgName').focus(),100);
-}
-function saveStampGroup(){
-  const n=document.getElementById('sgName').value.trim();
-  if(!n){notify('❌ أدخل اسم الفئة','red');return;}
-  stampGroups.push({id:'sg_'+Date.now(),name:n,items:[]});
-  saveStampGroups();closeModal('stampGroupModal');renderStampsPage();notify('✅ تمت إضافة الفئة: '+n);
-}
-function delStampGroup(gid){
-  if(!confirm('حذف هذه الفئة وكل أصنافها؟'))return;
-  stampGroups=stampGroups.filter(g=>g.id!==gid);
-  saveStampGroups();renderStampsPage();
-}
-function addStampItem(gid){
-  document.getElementById('siGid').value=gid;
-  const g=stampGroups.find(x=>x.id===gid);
-  document.getElementById('siGroupName').textContent=g?g.name:'';
-  document.getElementById('siName').value='';
-  document.getElementById('siBuy').value='';
-  document.getElementById('siSell').value='';
-  document.getElementById('siImgPreview').style.display='none';
-  document.getElementById('siImgData').value='';
-  document.getElementById('stampItemModal').style.display='block';
-  setTimeout(()=>document.getElementById('siName').focus(),100);
-}
-function editStampItem(gid,iid){
-  const g=stampGroups.find(x=>x.id===gid),it=g?g.items.find(x=>x.id===iid):null;
-  if(!g||!it)return;
-  document.getElementById('siGid').value=gid+'|'+iid;
-  document.getElementById('siGroupName').textContent=g.name;
-  document.getElementById('siName').value=it.name;
-  document.getElementById('siBuy').value=it.buyPrice||0;
-  document.getElementById('siSell').value=it.sellPrice||0;
-  const prev=document.getElementById('siImgPreview');
-  if(it.image){prev.src=resolveImg(it.image);prev.style.display='block';}else prev.style.display='none';
-  document.getElementById('siImgData').value=it.image||'';
-  document.getElementById('stampItemModal').style.display='block';
-}
-function siUploadImg(e){
-  const file=e.target.files[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=async ev=>{
-    try {
-      // ✅ حفظ الصورة في IndexedDB واستخدام مرجع
-      const imgRef=await saveImgToIdb(ev.target.result,'stamp',null);
-      document.getElementById('siImgData').value=imgRef;
-      const prev=document.getElementById('siImgPreview');
-      prev.src=ev.target.result; prev.style.display='block';
-    } catch(err){
-      console.error('IDB save failed:',err);
-      notify('❌ فشل حفظ الصورة محلياً','red');
-    }
-  };
-  reader.readAsDataURL(file);
-}
-function saveStampItem(){
-  const raw=document.getElementById('siGid').value;
-  const parts=raw.split('|'); const gid=parts[0], iid=parts[1]||null;
-  const g=stampGroups.find(x=>x.id===gid);if(!g)return;
-  const n=document.getElementById('siName').value.trim();
-  if(!n){notify('❌ أدخل اسم الصنف','red');return;}
-  const bp=parseFloat(document.getElementById('siBuy').value)||0;
-  const sp=parseFloat(document.getElementById('siSell').value)||bp;
-  const img=document.getElementById('siImgData').value||null;
-  if(iid){
-    const it=g.items.find(x=>x.id===iid);
-    if(it){it.name=n;it.buyPrice=bp;it.sellPrice=sp;if(img)it.image=img;}
-    saveStampGroups();closeModal('stampItemModal');renderStampsPage();notify('✅ تم تعديل الصنف: '+n);
-  } else {
-    g.items.push({id:'si_'+Date.now(),name:n,buyPrice:bp,sellPrice:sp,image:img});
-    saveStampGroups();closeModal('stampItemModal');renderStampsPage();notify('✅ تمت إضافة الصنف: '+n);
-  }
-}
-function delStampItem(gid,iid){
-  if(!confirm('حذف هذا الصنف؟'))return;
-  const g=stampGroups.find(x=>x.id===gid);if(!g)return;
-  g.items=g.items.filter(i=>i.id!==iid);
-  saveStampGroups();renderStampsPage();
-}
-function stampOp(gid,iid,type){
-  const g=stampGroups.find(x=>x.id===gid),it=g?g.items.find(x=>x.id===iid):null;if(!g||!it)return;
-  if(type==='بيع'&&getGroupStock(gid,iid).stock<=0){notify('⚠️ لا مخزون من هذا الصنف','warn');return;}
-  _stampModalType=type;
-  document.getElementById('stampModalTitle').textContent=(type==='شراء'?'📦 شراء — ':'💸 بيع — ')+it.name;
-  const gs=document.getElementById('stGroupSel');
-  gs.innerHTML=stampGroups.map(x=>`<option value="${x.id}">${x.name}</option>`).join('');
-  gs.value=gid;gs.disabled=true;
-  _loadStampItems(gid,iid);
-  document.getElementById('stUnitPrice').value=(type==='شراء'?it.buyPrice:it.sellPrice)||0;
-  document.getElementById('stQty').value='';calcStampTotal();
-  document.getElementById('stampModal').style.display='block';
-}
-function openStampModal(type){
-  _stampModalType=type;
-  document.getElementById('stampModalTitle').textContent=(type==='شراء'?'📦 شراء طوابع':'💸 بيع طوابع');
-  const gs=document.getElementById('stGroupSel');
-  gs.innerHTML='<option value="">— اختر الفئة —</option>'+stampGroups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
-  gs.disabled=false;
-  const is=document.getElementById('stItemSel');is.innerHTML='<option value="">— اختر الصنف —</option>';is.disabled=true;
-  ['stQty','stUnitPrice','stTotal','stDesc'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('stampModal').style.display='block';
-}
-function _loadStampItems(gid,selId){
-  const g=stampGroups.find(x=>x.id===gid),sel=document.getElementById('stItemSel');
-  if(!g||!g.items.length){sel.innerHTML='<option value="">لا أصناف</option>';sel.disabled=true;return;}
-  sel.innerHTML='<option value="">— اختر الصنف —</option>'+g.items.map(it=>`<option value="${it.id}">${it.name}</option>`).join('');
-  if(selId)sel.value=selId;sel.disabled=false;
-}
-function onStampGroupChange(){
-  const gid=document.getElementById('stGroupSel').value;
-  if(!gid){const is=document.getElementById('stItemSel');is.innerHTML='<option value="">—</option>';is.disabled=true;return;}
-  _loadStampItems(gid,null);document.getElementById('stUnitPrice').value='';document.getElementById('stTotal').value='';
-}
-function onStampItemChange(){
-  const gid=document.getElementById('stGroupSel').value,iid=document.getElementById('stItemSel').value;
-  const g=stampGroups.find(x=>x.id===gid),it=g?g.items.find(x=>x.id===iid):null;if(!it)return;
-  document.getElementById('stUnitPrice').value=(_stampModalType==='شراء'?it.buyPrice:it.sellPrice)||0;calcStampTotal();
-}
-function saveStampEntry(){
-  const gs=document.getElementById('stGroupSel'),is=document.getElementById('stItemSel');gs.disabled=false;
-  const gid=gs.value,iid=is.value;
-  const g=stampGroups.find(x=>x.id===gid),it=g?g.items.find(x=>x.id===iid):null;
-  if(!g){notify('❌ اختر الفئة','red');return;}if(!it){notify('❌ اختر الصنف','red');return;}
-  const qty=parseInt(document.getElementById('stQty').value)||0;if(qty<=0){notify('❌ أدخل الكمية','red');return;}
-  const up=parseFloat(document.getElementById('stUnitPrice').value)||0;if(up<=0){notify('❌ أدخل السعر','red');return;}
-  const type=_stampModalType;
-  if(type==='بيع'&&getGroupStock(gid,iid).stock<qty){notify('⚠️ المخزون المتاح: '+getGroupStock(gid,iid).stock,'warn');return;}
-  const total=qty*up;
-  stamps.push({id:'s_'+Date.now(),type,groupId:gid,groupName:g.name,itemId:iid,itemName:it.name,qty,unitPrice:up,total,desc:document.getElementById('stDesc').value.trim(),date:todayStr(),time:nowTime()});
-  saveStamps();
-  cashEntries.push({id:'c_'+Date.now(),type:(type==='بيع'?'وارد':'صادر'),amount:total,desc:(type==='بيع'?'بيع ':'شراء ')+qty+' '+it.name+' ('+g.name+')',date:todayStr(),time:nowTime()});
-  saveCash();is.disabled=false;closeModal('stampModal');renderStampsPage();notify('✅ تم تسجيل '+type+' '+qty+' '+it.name);
-}
-function delStamp(id){if(!confirm('حذف؟'))return;stamps=stamps.filter(s=>s.id!==id);saveStamps();renderStampsPage();}
-function printStampsReport(){
-  let rows='';
-  stampGroups.forEach(g=>g.items.forEach(it=>{
-    const st=getGroupStock(g.id,it.id);
-    rows+='<tr style="background:#f0f0f0"><td colspan="5" style="font-weight:bold;padding:6px">'+g.name+' — '+it.name+' (متبقي: '+st.stock+')</td></tr>';
-    stamps.filter(s=>s.groupId===g.id&&s.itemId===it.id).forEach(s=>{
-      rows+='<tr><td>'+s.type+'</td><td>'+s.qty+'</td><td>'+(s.unitPrice||0).toLocaleString()+'</td><td>'+(s.total||0).toLocaleString()+'</td><td>'+(s.date||'—')+'</td></tr>';
-    });
-  }));
-  const tRev=stamps.filter(s=>s.type==='بيع').reduce((a,s)=>a+(parseFloat(s.total)||0),0);
-  const tCost=stamps.filter(s=>s.type==='شراء').reduce((a,s)=>a+(parseFloat(s.total)||0),0);
-  const w=window.open('','_blank');
-  w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير الطوابع<\/title>'
-    +'<style>body{font-family:Arial;padding:20px;direction:rtl}table{width:100%;border-collapse:collapse;font-size:12px}'
-    +'th{background:#0B1426;color:#C9A84C;padding:7px;text-align:right}td{padding:5px 8px;border-bottom:1px solid #eee}'
-    +'.noprint{margin-bottom:10px}@media print{.noprint{display:none}}<\/style><\/head><body>'
-    +'<div class="noprint"><button onclick="window.print()" style="padding:7px 16px;background:#C9A84C;color:#111;border:none;border-radius:5px;cursor:pointer">طباعة<\/button><\/div>'
-    +'<h2>تقرير الطوابع — '+new Date().toLocaleDateString('ar-LB')+'<\/h2>'
-    +'<p><strong>إيرادات: '+tRev.toLocaleString()+' | تكلفة: '+tCost.toLocaleString()+' | ربح: '+(tRev-tCost).toLocaleString()+' ل.ل<\/strong><\/p>'
-    +'<table><thead><tr><th>النوع<\/th><th>الكمية<\/th><th>السعر<\/th><th>الإجمالي<\/th><th>التاريخ<\/th><\/tr><\/thead><tbody>'+rows+'<\/tbody><\/table><\/body><\/html>');
-  w.document.close();setTimeout(()=>w.print(),300);
-}
 function calcStampTotal() {
     const qty = parseFloat(document.getElementById('stQty').value) || 0;
     const price = parseFloat(document.getElementById('stUnitPrice').value) || 0;
@@ -8333,7 +7816,7 @@ function pickForm(i){
         <input type="text" id="ctNote" placeholder="أي ملاحظة...">
       </div>
       <div class="modal-actions">
-        <button class="btn btn-gold" onclick="saveCompoundTxn()" style="flex:1;justify-content:center;font-size:14px;padding:11px">💾 حفظ المعاملة المركبة</button>
+        <button class="btn btn-gold" onclick="saveCompoundTxnLegacy()" style="flex:1;justify-content:center;font-size:14px;padding:11px">💾 حفظ المعاملة المركبة</button>
         <button class="btn btn-outline" onclick="closeModal('compoundModal')">إلغاء</button>
       </div>
     </div>
