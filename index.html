@@ -820,8 +820,9 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
             <button type="button" class="btn btn-outline" onclick="addNewServiceType()" style="padding:9px 10px;flex-shrink:0" title="إضافة خدمة جديدة">+</button>
           </div>
         </div>
-        <div class="form-field"><label>التكلفة (ل.ل)</label><input type="number" id="txnCost" placeholder="0" min="0"></div>
-        <div class="form-field"><label>المبلغ المدفوع (ل.ل)</label><input type="number" id="txnPaid" placeholder="0" min="0" oninput="calcTxnStatus()"></div>
+        <div class="form-field"><label>سعر البيع — على المواطن (ل.ل)</label><input type="number" id="txnCost" placeholder="0" min="0" oninput="calcTxnStatus()"></div>
+        <div class="form-field"><label>التكلفة — كم دفعت أنت (مندوب/دائرة) (ل.ل)</label><input type="number" id="txnBuyCost" placeholder="0" min="0" oninput="calcTxnStatus()"></div>
+        <div class="form-field"><label>المبلغ المدفوع من المواطن (ل.ل)</label><input type="number" id="txnPaid" placeholder="0" min="0" oninput="calcTxnStatus()"></div>
         <div class="form-field"><label>حالة الدفع</label><input type="text" id="txnStatus" readonly></div>
         <div class="form-field"><label>الفرق</label><input type="text" id="txnDiff" readonly></div>
         <div class="form-field full"><label>ملاحظات المعاملة</label><textarea id="txnNote" rows="2" placeholder="أي ملاحظة تظهر على النموذج..." style="padding:9px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px;width:100%;resize:vertical;direction:rtl"></textarea></div>
@@ -4672,6 +4673,19 @@ function stageChip(t){
   return `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;background:${st.bg};color:${st.c};border:1px solid ${st.bd};white-space:nowrap">${st.icon} ${s}${ag?' · '+esc(ag):''}</span>`;
 }
 function payChip(t){ const p=txnPay(t); return `<span class="pay-badge ${p.cls}" style="font-size:10.5px">${p.k}</span>`; }
+// ─── الربح: التكلفة تُسترجَع أولاً من المحصّل، وما يزيد هو الربح المحقّق ───
+function txnBuy(t){ return (+t.buyCost||0) || (+t.totalAgentCost||0); }           // تكلفة المكتب الفعلية
+function txnRealizedProfit(t){ return (+t.paid||0) - txnBuy(t); }                  // ربح محقّق = المحصّل − التكلفة (قد يكون سالباً = جرور)
+function txnPotentialProfit(t){ return (+t.cost||0) - txnBuy(t); }                 // ربح متوقّع لو حُصّل كامل سعر البيع
+function txnPendingCost(t){ return Math.max(0, txnBuy(t) - (+t.paid||0)); }        // تكلفة معلّقة (مصروفة ولم تُسترجَع بعد)
+function txnProfitStats(){
+  let realized=0, pendingCost=0, potential=0, sales=0, cost=0;
+  transactions.forEach(t=>{ if(txnStage(t)==='ملغاة')return;
+    const b=txnBuy(t), paid=+t.paid||0, sell=+t.cost||0;
+    sales+=sell; cost+=b; realized+=(paid-b); pendingCost+=Math.max(0,b-paid); potential+=(sell-b);
+  });
+  return {realized,pendingCost,potential,sales,cost};
+}
 // نقل المعاملة بين المراحل (مع ختم الوقت للتقادم والمحاسبة)
 function advanceTxnStage(id,newStage){
   const t=transactions.find(x=>x.id===id); if(!t||!TXN_STAGES[newStage])return;
@@ -4770,7 +4784,7 @@ function renderTransactionsPage(){
         <div class="stat-card green" style="padding:12px"><div class="sc-label">محصّل اليوم</div><div class="sc-value" style="font-size:16px">${todayIncome.toLocaleString()} ل.ل</div></div>
         <div class="stat-card red" style="padding:12px"><div class="sc-label">رصيد غير محصّل</div><div class="sc-value" style="font-size:16px">${(totalCost-totalPaid).toLocaleString()} ل.ل</div></div>
       </div>
-      ${(()=>{const ms=txnMoneyStats();const box=(bg,bd,cl,lbl,val,sub)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:10px;padding:11px 13px"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">${lbl}</div><div style="font-size:15px;font-weight:800;color:${cl}">${val}</div>${sub?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${sub}</div>`:''}</div>`;return `
+      ${(()=>{const ms=txnMoneyStats();const box=(bg,bd,cl,lbl,val,sub)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:10px;padding:11px 13px"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">${lbl}</div><div style="font-size:15px;font-weight:800;color:${cl}">${val}</div>${sub?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${sub}</div>`:''}</div>`;const ps=txnProfitStats();return `
       <div class="recent-card" style="margin-bottom:14px;padding:13px">
         <div style="font-size:12px;font-weight:700;color:var(--gold3);margin-bottom:10px">💰 لوحة الأموال المعلّقة والمخاطر</div>
         <div class="dash-grid" style="grid-template-columns:repeat(4,1fr);gap:10px">
@@ -4778,6 +4792,13 @@ function renderTransactionsPage(){
           ${box('rgba(232,128,76,0.1)','rgba(232,128,76,0.35)','#E8804C','⚠️ خطر خسارة فعلي',ms.atRisk.toLocaleString()+' ل.ل','سُلّمت الوثيقة ولم يُدفَع')}
           ${box('rgba(224,164,76,0.1)','rgba(224,164,76,0.3)','#E0A44C','🔒 عند المندوب',ms.atAgentCount+' معاملة',ms.atAgentMoney>0?'رأس مال: '+ms.atAgentMoney.toLocaleString()+' ل.ل':'بانتظار الاسترجاع')}
           ${box('rgba(76,139,201,0.1)','rgba(76,139,201,0.3)','#88BBE8','📤 غير مستلمة',ms.undelivered+' معاملة','لم تُسلَّم للمواطن بعد')}
+        </div>
+        <div style="height:1px;background:var(--border);margin:12px 0"></div>
+        <div style="font-size:12px;font-weight:700;color:var(--gold3);margin-bottom:10px">📈 الأرباح (الربح يُحسَب عند التحصيل فقط)</div>
+        <div class="dash-grid" style="grid-template-columns:repeat(3,1fr);gap:10px">
+          ${box('rgba(76,175,122,0.1)','rgba(76,175,122,0.3)',ps.realized>=0?'#7DCCA0':'#E88080','✅ صافي الربح المحقّق',ps.realized.toLocaleString()+' ل.ل','المحصّل − التكاليف')}
+          ${box('rgba(232,128,76,0.1)','rgba(232,128,76,0.3)','#E8804C','⏳ تكاليف معلّقة (جرور)',ps.pendingCost.toLocaleString()+' ل.ل','مصروفة ولم تُسترجَع بعد')}
+          ${box('rgba(201,168,76,0.08)','rgba(201,168,76,0.25)','#E0C060','🎯 ربح متوقّع كامل',ps.potential.toLocaleString()+' ل.ل','لو حُصّلت كل المبيعات')}
         </div>
       </div>`;})()}
       <div id="txnStageChips" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;overflow-x:auto"></div>
@@ -4808,7 +4829,7 @@ function renderTxnTable(list){
       <td>${(t.cost||0).toLocaleString()}</td>
       <td style="color:#7DCCA0">${(t.paid||0).toLocaleString()}</td>
       <td style="color:${(t.cost-t.paid)>0?'#E88080':'#7DCCA0'}">${((t.cost||0)-(t.paid||0)).toLocaleString()}</td>
-      <td><div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="تعديل الدفع / إضافة دفعة / سجل الدفعات">${payChip(t)}</span></div></td>
+      <td><div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="تعديل الدفع / إضافة دفعة / سجل الدفعات">${payChip(t)}</span>${txnBuy(t)>0?`<span style="font-size:9.5px;font-weight:700;color:${txnRealizedProfit(t)>=0?'#7DCCA0':'#E88080'}" title="ربح محقّق (المحصّل − التكلفة)">ربح: ${txnRealizedProfit(t).toLocaleString()}</span>`:''}</div></td>
       <td><div style='display:flex;gap:3px;align-items:center;flex-wrap:nowrap'>${txnStageBtns(t)}<span style="width:1px;height:16px;background:var(--border);margin:0 1px"></span><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px' title='واتساب: استلام'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px' title='واتساب: قيد الإنجاز'>⏳</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px' title='واتساب: جاهزة'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)' title='واتساب: تم التسليم'>🤝</button><button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px' title='حذف'>🗑️</button></div></td>
     </tr>`).join('');
 }
@@ -4858,6 +4879,7 @@ function openTxnModal(){
   populateTxnSelect();
   document.getElementById('txnType').value='';
   document.getElementById('txnCost').value='';
+  const _bc=document.getElementById('txnBuyCost');if(_bc)_bc.value='';
   document.getElementById('txnPaid').value='';
   document.getElementById('txnStatus').value='';
   document.getElementById('txnDiff').value='';
@@ -4888,10 +4910,13 @@ function selectTxnCit(id,name){
 function calcTxnStatus(){
   const cost=parseFloat(document.getElementById('txnCost').value)||0;
   const paid=parseFloat(document.getElementById('txnPaid').value)||0;
+  const buy=parseFloat((document.getElementById('txnBuyCost')||{}).value)||0;
   const diff=cost-paid;
   let status=paid===0?'غير مدفوع':paid>=cost?'مدفوع بالكامل':'دفع جزئي';
   document.getElementById('txnStatus').value=status;
-  document.getElementById('txnDiff').value=diff>0?`متبقي: ${diff.toLocaleString()} ل.ل`:diff<0?`زيادة: ${Math.abs(diff).toLocaleString()} ل.ل`:'✓ مطابق';
+  const realized=paid-buy; // الربح المحقّق = المحصّل − التكلفة
+  const profTxt = buy>0||paid>0 ? ` · الربح المحقّق: ${realized.toLocaleString()} ل.ل${realized<0?' (تكلفة معلّقة)':''}` : '';
+  document.getElementById('txnDiff').value=(diff>0?`متبقي: ${diff.toLocaleString()} ل.ل`:diff<0?`زيادة: ${Math.abs(diff).toLocaleString()} ل.ل`:'✓ مطابق')+profTxt;
 }
 function saveTxn(){
   const citName=document.getElementById('txnCitName').value.trim();
@@ -4907,11 +4932,12 @@ function saveTxn(){
     date:new Date().toLocaleDateString('ar-LB',{year:'numeric',month:'2-digit',day:'2-digit'}),
     time:nowTime(),
     cost:parseFloat(document.getElementById('txnCost').value)||0,
+    buyCost:parseFloat((document.getElementById('txnBuyCost')||{}).value)||0,
     paid:parseFloat(document.getElementById('txnPaid').value)||0,
     payStatus:document.getElementById('txnStatus').value||'غير مدفوع',
     note:document.getElementById('txnNote').value.trim(),
     phone:(document.getElementById('txnPhone')?document.getElementById('txnPhone').value.trim():''),
-    profit:parseFloat(document.getElementById('txnPaid').value)||0  // profit = paid (no agent cost for simple txn)
+    profit:(parseFloat(document.getElementById('txnPaid').value)||0)-(parseFloat((document.getElementById('txnBuyCost')||{}).value)||0)  // ربح محقّق = المحصّل − التكلفة
   };
   transactions.push(t);saveTxns();
   // Auto cash entry when paid > 0
@@ -6260,6 +6286,7 @@ function renderTxnPayModal(){
   const t=transactions.find(x=>x.id===_payEditorTxnId); if(!t)return;
   const d=_linkedDebt(t.id);
   const cost=+t.cost||0, paid=+t.paid||0, rem=Math.max(0,cost-paid);
+  const buy=txnBuy(t), realized=paid-buy;
   const p=txnPay(t);
   const payments=(d&&Array.isArray(d.payments))?d.payments:[];
   document.getElementById('txnPayBody').innerHTML=`
@@ -6270,21 +6297,32 @@ function renderTxnPayModal(){
       </div>
       <div style="font-size:11px;color:var(--text3)">${esc(t.type||'')}</div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
       <div style="background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:9px">
-        <div style="font-size:10px;color:var(--text3);margin-bottom:3px;text-align:center">التكلفة</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px;text-align:center">سعر البيع</div>
         <input type="number" id="tpCost" value="${cost}" style="width:100%;background:var(--navy3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-weight:700;padding:4px 2px;text-align:center">
       </div>
+      <div style="background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:9px">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px;text-align:center">التكلفة (دفعتها أنت)</div>
+        <input type="number" id="tpBuyCost" value="${buy}" style="width:100%;background:var(--navy3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;font-weight:700;padding:4px 2px;text-align:center">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
       <div style="background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:9px;text-align:center">
         <div style="font-size:10px;color:var(--text3);margin-bottom:3px">المدفوع</div>
-        <div style="font-size:15px;font-weight:800;color:#7DCCA0">${paid.toLocaleString()}</div>
+        <div style="font-size:14px;font-weight:800;color:#7DCCA0">${paid.toLocaleString()}</div>
       </div>
       <div style="background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:9px;text-align:center">
         <div style="font-size:10px;color:var(--text3);margin-bottom:3px">المتبقّي</div>
-        <div style="font-size:15px;font-weight:800;color:${rem>0?'#E88080':'#7DCCA0'}">${rem.toLocaleString()}</div>
+        <div style="font-size:14px;font-weight:800;color:${rem>0?'#E88080':'#7DCCA0'}">${rem.toLocaleString()}</div>
+      </div>
+      <div style="background:${realized>=0?'rgba(76,175,122,0.1)':'rgba(201,76,76,0.1)'};border:1px solid ${realized>=0?'rgba(76,175,122,0.3)':'rgba(201,76,76,0.3)'};border-radius:8px;padding:9px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px">الربح المحقّق</div>
+        <div style="font-size:14px;font-weight:800;color:${realized>=0?'#7DCCA0':'#E88080'}">${realized.toLocaleString()}</div>
       </div>
     </div>
-    <button class="btn btn-outline" onclick="setTxnCost()" style="width:100%;justify-content:center;font-size:11.5px;padding:6px;margin-bottom:14px">💾 حفظ التكلفة المعدّلة</button>
+    ${realized<0&&buy>0?`<div style="font-size:10.5px;color:#E8804C;text-align:center;margin-bottom:10px">⏳ التكلفة لم تُسترجَع بعد — الربح يبدأ بعد تحصيل ${buy.toLocaleString()} ل.ل</div>`:''}
+    <button class="btn btn-outline" onclick="setTxnCost()" style="width:100%;justify-content:center;font-size:11.5px;padding:6px;margin-bottom:14px">💾 حفظ سعر البيع والتكلفة</button>
     ${rem>0?`
     <div class="form-field" style="margin-bottom:10px">
       <label>➕ إضافة دفعة (ل.ل)</label>
@@ -6318,15 +6356,17 @@ function addTxnPayment(){
 function setTxnCost(){
   const t=transactions.find(x=>x.id===_payEditorTxnId); if(!t)return;
   const nc=parseFloat(document.getElementById('tpCost').value);
-  if(isNaN(nc)||nc<0){notify('❌ تكلفة غير صحيحة','red');return;}
-  t.cost=nc;
+  if(isNaN(nc)||nc<0){notify('❌ سعر بيع غير صحيح','red');return;}
+  const nb=parseFloat((document.getElementById('tpBuyCost')||{}).value)||0;
+  t.cost=nc; t.buyCost=nb<0?0:nb;
   const paid=+t.paid||0;
   t.payStatus=paid>=nc?'مدفوع بالكامل':paid>0?'دفع جزئي':'غير مدفوع';
+  t.profit=paid-(t.buyCost||0);
   const d=_linkedDebt(t.id); const rem=Math.max(0,nc-paid);
   if(d){ d.amount=Math.max(0,nc-(paid-(+d.paid||0))); d.remaining=rem; d.status=rem<=0?'مسدّد':d.paid>0?'جزئي':'قائم'; }
   else if(rem>0){ debts.push({id:'d_'+Date.now(),txnRef:t.id,name:t.citName||'مجهول',amount:rem,paid:0,remaining:rem,reason:'معاملة #'+formatSerial(t.serial)+' - '+(t.type||''),date:t.date||todayStr(),status:'قائم',payments:[]}); }
   saveTxns(); saveDebts();
-  notify('💾 حُدّثت التكلفة');
+  notify('💾 حُفظ سعر البيع والتكلفة');
   renderTxnPayModal(); _refreshAfterPay();
 }
 // ─── ملف الدَّين الكامل (سجل الدفعات + التفاصيل) ───
@@ -7251,6 +7291,16 @@ function renderProfitsPage(){
         <div class="stat-card ${compoundProfit>=0?'green':'red'}" style="padding:14px"><div class="sc-label">ربح المعاملات المركبة</div><div class="sc-value" style="font-size:18px;color:${compoundProfit>=0?'#7DCCA0':'#E88080'}">${compoundProfit.toLocaleString()}</div><div class="sc-sub">من ${compoundTxns.length} معاملة</div></div>
         <div class="stat-card red" style="padding:14px"><div class="sc-label">ديون مستحقة</div><div class="sc-value" style="font-size:18px">${(debtTotal-debtPaid).toLocaleString()}</div><div class="sc-sub">ل.ل غير محصّلة</div></div>
       </div>
+      ${(()=>{const ps=txnProfitStats();const b=(bg,bd,cl,l,v,s)=>`<div style="background:${bg};border:1px solid ${bd};border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:var(--text3);margin-bottom:4px">${l}</div><div style="font-size:17px;font-weight:800;color:${cl}">${v}</div>${s?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${s}</div>`:''}</div>`;return `
+      <div class="recent-card" style="margin-bottom:20px;padding:14px">
+        <div style="font-size:13px;font-weight:700;color:var(--gold3);margin-bottom:12px">📈 أرباح المعاملات — الربح يُحسَب عند التحصيل فقط</div>
+        <div class="dash-grid" style="grid-template-columns:repeat(4,1fr);gap:12px">
+          ${b('rgba(76,175,122,0.1)','rgba(76,175,122,0.3)',ps.realized>=0?'#7DCCA0':'#E88080','✅ صافي الربح المحقّق',ps.realized.toLocaleString()+' ل.ل','المحصّل − التكاليف')}
+          ${b('rgba(232,128,76,0.1)','rgba(232,128,76,0.3)','#E8804C','⏳ تكاليف معلّقة (جرور)',ps.pendingCost.toLocaleString()+' ل.ل','مصروفة ولم تُسترجَع بعد')}
+          ${b('rgba(201,168,76,0.08)','rgba(201,168,76,0.25)','#E0C060','🎯 ربح متوقّع كامل',ps.potential.toLocaleString()+' ل.ل','لو حُصّلت كل المبيعات')}
+          ${b('rgba(76,139,201,0.1)','rgba(76,139,201,0.3)','#88BBE8','🧾 إجمالي المبيعات',ps.sales.toLocaleString()+' ل.ل','بتكاليف '+ps.cost.toLocaleString()+' ل.ل')}
+        </div>
+      </div>`;})()}
       <div class="charts-row">
         <div class="chart-card">
           <div class="chart-title">الإيرادات الشهرية (آخر 6 أشهر)</div>
