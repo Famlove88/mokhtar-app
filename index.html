@@ -808,6 +808,14 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
         <div class="form-field"><label>تاريخ اليوم</label><input type="text" id="txnDate" readonly style="opacity:0.7"></div>
         <div class="form-field"><label>الوقت</label><input type="text" id="txnTime" readonly style="opacity:0.7"></div>
       </div>
+      <div style="margin-top:10px">
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:6px">نوع المعاملة</label>
+        <div style="display:flex;gap:8px">
+          <button type="button" id="txnKindOfficial" onclick="setTxnKind('official')" style="flex:1;padding:9px;border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--gold);background:rgba(201,168,76,0.15);color:var(--gold)">📋 رسمية (سجل المختار)</button>
+          <button type="button" id="txnKindPrivate" onclick="setTxnKind('private')" style="flex:1;padding:9px;border-radius:8px;font-family:'Cairo',sans-serif;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:var(--navy2);color:var(--text2)">🚗 خدمة خاصة</button>
+        </div>
+        <input type="hidden" id="txnKind" value="official">
+      </div>
       <div class="form-grid" style="margin-top:10px">
         <div class="form-field"><label>المواطن</label><input type="text" id="txnCitName" placeholder="ابحث عن مواطن..." oninput="searchTxnCit(this.value)"><div id="txnCitSug" style="position:relative"></div></div>
         <div class="form-field"><label>هاتف الواتساب</label><input type="tel" id="txnPhone" placeholder="9613456789" style="direction:ltr;text-align:right"></div>
@@ -3409,6 +3417,12 @@ function renderReportsPage(){
           <button onclick="setReportType('year',this)" class="rpt-type-btn">هذه السنة</button>
           <button onclick="setReportType('custom',this)" class="rpt-type-btn">📅 فترة مخصصة</button>
         </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;align-items:center" id="reportKindBtns">
+          <span style="font-size:11px;color:var(--text3)">النطاق:</span>
+          <button onclick="setRptKind('official',this)" class="rpt-type-btn rpt-active">📋 رسمية (المختار)</button>
+          <button onclick="setRptKind('private',this)" class="rpt-type-btn">🚗 خدمات خاصة</button>
+          <button onclick="setRptKind('all',this)" class="rpt-type-btn">الكل</button>
+        </div>
         <!-- Custom range -->
         <div id="customRangeRow" style="display:none;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
           <div class="form-field" style="flex:1;min-width:140px"><label>من تاريخ</label><input type="date" id="rptFrom" value="${todayISO_val}"></div>
@@ -3451,7 +3465,15 @@ function renderReportsPage(){
   document.head.appendChild(style);
 
   window._rptType='today';
+  window._rptKind='official';
   previewReport();
+}
+function setRptKind(k,btn){
+  window._rptKind=k;
+  document.querySelectorAll('#reportKindBtns .rpt-type-btn').forEach(b=>b.classList.remove('rpt-active'));
+  if(btn)btn.classList.add('rpt-active');
+  const pv=document.getElementById('rptPreview');
+  if(pv&&pv.innerHTML.trim())previewReport(); // حدّث المعاينة إن كانت ظاهرة
 }
 function setReportType(type,btn){
   window._rptType=type;
@@ -3506,7 +3528,10 @@ function getReportRange(){
 }
 function getFilteredTxns(){
   const{from,to}=getReportRange();
+  const scope=window._rptKind||'official';
   return transactions.filter(t=>{
+    if(scope==='official' && txnKind(t)!=='official')return false; // تقرير المختار = الرسمية فقط
+    if(scope==='private' && txnKind(t)!=='private')return false;
     if(!from&&!to)return true;
     const parts=(t.date||'').split('/');
     let d=null;
@@ -3515,7 +3540,7 @@ function getFilteredTxns(){
     if(from&&d<from)return false;
     if(to&&d>to)return false;
     return true;
-  }).sort((a,b)=>a.serial-b.serial);
+  }).sort((a,b)=>{var an=parseInt(a.serial,10),bn=parseInt(b.serial,10); if(isNaN(an)&&isNaN(bn))return String(a.serial||'').localeCompare(String(b.serial||'')); if(isNaN(an))return 1; if(isNaN(bn))return -1; return an-bn;});
 }
 function previewReport(){
   const{label}=getReportRange();
@@ -4687,6 +4712,15 @@ function stageChip(t){
   return `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;background:${st.bg};color:${st.c};border:1px solid ${st.bd};white-space:nowrap">${st.icon} ${s}${ag?' · '+esc(ag):''}</span>`;
 }
 function payChip(t){ const p=txnPay(t); return `<span class="pay-badge ${p.cls}" style="font-size:10.5px">${p.k}</span>`; }
+// ─── تصنيف المعاملة: رسمية (مختار) أو خدمة خاصة — القديمة تُعتبر رسمية تلقائياً ───
+function txnKind(t){ return t&&t.kind==='private'?'private':'official'; }
+let _txnKindFilter=''; // فلتر السجل: '' الكل، official، private
+// عدّاد مستقل للخدمات الخاصة (S-001...) — لا يمسّ العدّاد الرسمي إطلاقاً
+function nextPrivateSerial(){
+  var mx=0;
+  transactions.forEach(function(t){ if(t&&typeof t.serial==='string'){ var m=t.serial.match(/^S-(\d+)$/); if(m){ var n=parseInt(m[1],10); if(n>mx)mx=n; } } });
+  return 'S-'+String(mx+1).padStart(3,'0');
+}
 // ─── الربح: التكلفة تُسترجَع أولاً من المحصّل، وما يزيد هو الربح المحقّق ───
 function txnBuy(t){ return (+t.buyCost||0) || (+t.totalAgentCost||0); }           // تكلفة المكتب الفعلية
 function txnRealizedProfit(t){ return (+t.paid||0) - txnBuy(t); }                  // ربح محقّق = المحصّل − التكلفة (قد يكون سالباً = جرور)
@@ -4735,6 +4769,32 @@ function _reRenderTxnViews(){
 // معاملات محوّلة لمندوب معيّن — تُشتَق من المعاملة نفسها (مصدر حقيقة واحد، لا drift)
 function _agentTxns(agId){ return transactions.filter(t=>t.agentId===agId && txnStage(t)==='عند المندوب'); }
 function receiveTxnFromAgent(id){ advanceTxnStage(id,'جاهزة'); } // ترجع "جاهزة" فتختفي من ملف المندوب
+// ═══════ نظام التقادم (Aging) — العمر = كم يوم في المرحلة الحالية ═══════
+function _txnRefTime(t){
+  if(t&&t.stageAt) return t.stageAt;                 // وقت آخر نقلة مرحلة
+  var m=(t&&t.id||'').match(/(\d{10,})/);            // بديل للقديمة: وقت الإنشاء من id
+  if(m) return parseInt(m[1],10);
+  return Date.now();
+}
+function txnAgeDays(t){ return Math.floor((Date.now()-_txnRefTime(t))/86400000); }
+function txnIsActive(t){ const s=txnStage(t); return s!=='سُلّمت' && s!=='ملغاة'; } // المنجزة/الملغاة لا تتقادم
+function txnAgeLevel(t){ // 0 عادي · 1 أصفر (3+) · 2 أحمر (7+)
+  if(!txnIsActive(t)) return 0;
+  const d=txnAgeDays(t);
+  if(d>=7) return 2;
+  if(d>=3) return 1;
+  return 0;
+}
+function txnLateList(){ return transactions.filter(t=>txnAgeLevel(t)>0).sort((a,b)=>_txnRefTime(a)-_txnRefTime(b)); } // الأقدم أولاً
+// تذكير المندوب بمعاملة متأخّرة (رسالة قابلة للتعديل تُرسل لهاتف المندوب)
+function remindAgentAboutTxn(txnId){
+  const t=transactions.find(x=>x.id===txnId); if(!t)return;
+  const ag=agents.find(a=>a.id===t.agentId);
+  if(!ag){ notify('لا مندوب معيّن لهذه المعاملة','red'); return; }
+  const days=txnAgeDays(t);
+  const msg='الأستاذ '+(ag.name||'')+' المحترم،\n\nتذكير بخصوص المعاملة:\n\u{1F4CB} '+(t.type||'')+'\nالرقم: #'+formatSerial(t.serial)+'\nللمواطن: '+(t.citName||'—')+'\n\nلا تزال قيد الإنجاز لديكم منذ '+days+' يوم. نرجو المتابعة وإعلامنا بالمستجدّات. شكراً لتعاونكم.\n\nمكتب المختار \u{1F332}';
+  _openWaSend(ag.phone||'', msg, '📲 تذكير المندوب — #'+formatSerial(t.serial));
+}
 // أزرار المرحلة السياقية (تُظهر الخطوة التالية فقط — نظيفة على الموبايل)
 function txnStageBtns(t){
   const s=txnStage(t);
@@ -4802,11 +4862,40 @@ function renderTransactionsPage(){
         <div class="stat-card green" style="padding:12px"><div class="sc-label">محصّل اليوم</div><div class="sc-value" style="font-size:16px">${todayIncome.toLocaleString()} ل.ل</div></div>
         <div class="stat-card red" style="padding:12px"><div class="sc-label">رصيد غير محصّل</div><div class="sc-value" style="font-size:16px">${(totalCost-totalPaid).toLocaleString()} ل.ل</div></div>
       </div>
+      ${(()=>{const late=txnLateList();if(!late.length)return '';
+        const red=late.filter(t=>txnAgeLevel(t)===2).length, yel=late.filter(t=>txnAgeLevel(t)===1).length;
+        return `<div class="recent-card" style="margin-bottom:14px;padding:13px;border:1px solid rgba(201,76,76,0.4);background:linear-gradient(135deg,rgba(201,76,76,0.06),rgba(224,164,76,0.05))">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+            <div style="font-size:13px;font-weight:800;color:#E88080">⏰ معاملات متأخّرة تحتاج متابعة (${late.length})</div>
+            <div style="display:flex;gap:10px;font-size:11px">
+              <span style="color:#E88080;font-weight:700">🔴 ${red} متأخّرة جداً (7+ أيام)</span>
+              <span style="color:#E0A44C;font-weight:700">🟡 ${yel} تأخّرت (3+ أيام)</span>
+            </div>
+          </div>
+          <div style="max-height:300px;overflow-y:auto">
+            ${late.map(t=>{const lvl=txnAgeLevel(t),days=txnAgeDays(t),s=txnStage(t);
+              const cl=lvl===2?'#E88080':'#E0A44C', bg=lvl===2?'rgba(201,76,76,0.08)':'rgba(224,164,76,0.08)', bd=lvl===2?'rgba(201,76,76,0.25)':'rgba(224,164,76,0.25)';
+              let btn='';
+              if(s==='عند المندوب'){const ag=agents.find(a=>a.id===t.agentId);btn=`<button class="btn" onclick="remindAgentAboutTxn('${t.id}')" style="font-size:10.5px;padding:4px 9px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35);white-space:nowrap">📲 ذكّر المندوب${ag?' ('+esc(ag.name)+')':''}</button>`;}
+              else if(s==='جاهزة'){btn=`<button class="btn" onclick="sendWhatsAppEditable('${t.id}','تسليم')" style="font-size:10.5px;padding:4px 9px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35);white-space:nowrap">📲 ذكّر المواطن للاستلام</button>`;}
+              else {btn=`<button class="btn" onclick="sendWhatsAppEditable('${t.id}','تأخير')" style="font-size:10.5px;padding:4px 9px;background:rgba(232,128,76,0.15);color:#E8804C;border:1px solid rgba(232,128,76,0.4);white-space:nowrap">⏰ اعتذار للمواطن</button>`;}
+              return `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:${bg};border:1px solid ${bd};border-radius:9px;padding:9px 11px;margin-bottom:6px">
+                <div style="flex:1;min-width:170px">
+                  <div style="font-size:12.5px;font-weight:700;color:var(--text)">${txnKind(t)==='private'?'🚗 '+formatSerial(t.serial):'#'+formatSerial(t.serial)} · ${esc(t.type||'—')}</div>
+                  <div style="font-size:10.5px;color:var(--text3);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">👤 ${esc(t.citName||'—')} · ${stageChip(t)} · <span style="color:${cl};font-weight:700">منذ ${days} يوم</span></div>
+                </div>
+                ${btn}
+              </div>`;}).join('')}
+          </div>
+        </div>`;})()}
       <div id="txnStageChips" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;overflow-x:auto"></div>
       <div style="display:flex;gap:10px;margin-bottom:12px">
         <input type="text" id="txnSearch" oninput="filterTxnTable()" placeholder="🔍 بحث..." style="flex:1;padding:8px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px">
         <select id="txnFilterStatus" onchange="filterTxnTable()" style="padding:8px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px">
           <option value="">كل حالات الدفع</option><option value="مدفوع بالكامل">مدفوع</option><option value="دفع جزئي">دفع جزئي</option><option value="غير مدفوع">غير مدفوع</option>
+        </select>
+        <select id="txnFilterKind" onchange="filterTxnTable()" style="padding:8px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px">
+          <option value="">كل الأنواع</option><option value="official">📋 رسمية</option><option value="private">🚗 خدمات خاصة</option>
         </select>
       </div>
       <div class="recent-card">
@@ -4822,7 +4911,7 @@ function renderTxnTable(list){
   document.getElementById('txnTbody').innerHTML=sorted.length===0?
     `<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text3)">لا معاملات بعد</td></tr>`:
     sorted.map(t=>`<tr>
-      <td style="color:var(--gold);font-weight:700">#${formatSerial(t.serial)}</td>
+      <td style="color:var(--gold);font-weight:700;white-space:nowrap">${txnAgeLevel(t)===2?'🔴 ':txnAgeLevel(t)===1?'🟡 ':''}${txnKind(t)==='private'?'🚗 '+formatSerial(t.serial):'#'+formatSerial(t.serial)}</td>
       <td style="color:var(--text);cursor:pointer" onclick="if('${t.citId}'){currentCitId='${t.citId}';showPage('citizen_detail');}">${t.citName||'—'}</td>
       <td>${t.type||'—'}</td>
       <td style="direction:ltr;text-align:right;white-space:nowrap">${t.date||'—'}</td>
@@ -4837,10 +4926,12 @@ function renderTxnTable(list){
 function applyTxnFilters(){
   const f=(document.getElementById('txnSearch')?.value||'').toLowerCase();
   const s=document.getElementById('txnFilterStatus')?.value||'';
+  const kf=document.getElementById('txnFilterKind')?.value||'';
   const sf=_txnStageFilter;
   const payMap={'مدفوع بالكامل':'مدفوع','دفع جزئي':'جزئي','غير مدفوع':'غير مدفوع'};
   renderTxnTable(transactions.filter(t=>{
-    if(f && !((t.citName||'').toLowerCase().includes(f)||(t.type||'').includes(f)||((t.serial+'').includes(f)))) return false;
+    if(kf && txnKind(t)!==kf) return false;
+    if(f && !((t.citName||'').toLowerCase().includes(f)||(t.type||'').includes(f)||((t.serial+'').toLowerCase().includes(f)))) return false;
     if(s && txnPay(t).k!==(payMap[s]||s)) return false;
     if(sf){
       const st=txnStage(t), rem=(+t.cost||0)-(+t.paid||0);
@@ -4870,6 +4961,22 @@ function addNewServiceType(){
   document.getElementById('txnType').value=n;
   notify('✅ تمت إضافة: '+n);
 }
+function setTxnKind(k){
+  const hid=document.getElementById('txnKind'); if(hid)hid.value=k;
+  const off=document.getElementById('txnKindOfficial'), pri=document.getElementById('txnKindPrivate');
+  const onS='padding:9px;border-radius:8px;font-family:Cairo,sans-serif;font-size:13px;font-weight:700;cursor:pointer;';
+  if(off&&pri){
+    if(k==='private'){
+      pri.style.cssText='flex:1;'+onS+'border:1px solid #E0A44C;background:rgba(224,164,76,0.15);color:#E0A44C';
+      off.style.cssText='flex:1;'+onS+'border:1px solid var(--border);background:var(--navy2);color:var(--text2)';
+    }else{
+      off.style.cssText='flex:1;'+onS+'border:1px solid var(--gold);background:rgba(201,168,76,0.15);color:var(--gold)';
+      pri.style.cssText='flex:1;'+onS+'border:1px solid var(--border);background:var(--navy2);color:var(--text2)';
+    }
+  }
+  const se=document.getElementById('txnSerial'); // معاينة الرقم حسب النوع
+  if(se)se.value='#'+(k==='private'?nextPrivateSerial():formatSerial(nextSerial()));
+}
 function openTxnModal(){
   const modal=document.getElementById('txnModal');
   modal.style.display='block';
@@ -4886,6 +4993,7 @@ function openTxnModal(){
   document.getElementById('txnDiff').value='';
   const _tnEl=document.getElementById('txnNote');if(_tnEl)_tnEl.value='';
   const _tp=document.getElementById('txnPhone');if(_tp)_tp.value='';
+  setTxnKind('official'); // افتراضياً رسمية
   modal._citId=null;
 }
 function openTxnModalForCit(){
@@ -4926,8 +5034,10 @@ function saveTxn(){
   const typeVal=typeEl.value;
   if(!typeVal||typeVal==='__new__'){notify('❌ اختر نوع المعاملة','red');return;}
   calcTxnStatus();
+  const _kind=(document.getElementById('txnKind')||{}).value==='private'?'private':'official';
   const t={
-    id:'t_'+Date.now(),serial:nextSerial(),
+    id:'t_'+Date.now(),serial:_kind==='private'?nextPrivateSerial():nextSerial(),
+    kind:_kind,
     citId:document.getElementById('txnModal')._citId||null,
     citName,type:typeVal==='__new__'?type:typeVal,
     date:new Date().toLocaleDateString('ar-LB',{year:'numeric',month:'2-digit',day:'2-digit'}),
@@ -7412,16 +7522,19 @@ function _waGo(url){
 }
 // إرسال قابل للتعديل: يعرض الرسالة بمربّع تعديل قبل الإرسال (لإضافة سبب/تغيير لهذه المرة فقط)
 let _waSendData=null;
+function _openWaSend(phone,message,title){
+  if(!phone||!String(phone).trim()){ const p=prompt('أدخل رقم الواتساب (مثال: 9613456789):',''); if(!p||!p.trim())return; phone=p.trim(); }
+  _waSendData={phone:String(phone).trim()};
+  document.getElementById('waSendText').value=message||'';
+  document.getElementById('waSendTitle').textContent=title||'✏️ رسالة واتساب';
+  document.getElementById('waSendModal').style.display='block';
+  setTimeout(function(){const el=document.getElementById('waSendText');if(el)el.focus();},120);
+}
 function sendWhatsAppEditable(txnId,stage){
   const t=transactions.find(x=>x.id===txnId);
   if(!t){notify('المعاملة غير موجودة','red');return;}
-  let phone=t.phone||'';
-  if(!phone){ phone=prompt('أدخل رقم الواتساب (مثال: 9613456789):',''); if(!phone||!phone.trim())return; t.phone=phone.trim(); saveTxns(); phone=t.phone; }
-  _waSendData={phone:phone};
-  document.getElementById('waSendText').value=_fillWa(_getWaTmpl(stage),t);
-  document.getElementById('waSendTitle').textContent='✏️ '+(stage==='تأخير'?'اعتذار عن التأخير':'رسالة واتساب')+' — #'+formatSerial(t.serial);
-  document.getElementById('waSendModal').style.display='block';
-  setTimeout(function(){const el=document.getElementById('waSendText');if(el)el.focus();},120);
+  if(!t.phone){ const p=prompt('أدخل رقم الواتساب (مثال: 9613456789):',''); if(!p||!p.trim())return; t.phone=p.trim(); saveTxns(); }
+  _openWaSend(t.phone, _fillWa(_getWaTmpl(stage),t), '✏️ '+(stage==='تأخير'?'اعتذار عن التأخير':'رسالة واتساب')+' — #'+formatSerial(t.serial));
 }
 function confirmWaSend(){
   if(!_waSendData)return;
