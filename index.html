@@ -1026,6 +1026,21 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
   </div>
 </div>
 
+<!-- تعديل رسالة الواتساب قبل الإرسال -->
+<div id="waSendModal" style="display:none">
+  <div class="modal-overlay">
+    <div class="modal-box" style="width:440px;max-width:94vw">
+      <div class="modal-title" id="waSendTitle">✏️ رسالة واتساب</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">عدّل الرسالة إن أردت (مثلاً لإضافة سبب التأخير) قبل الإرسال:</div>
+      <textarea id="waSendText" rows="8" style="width:100%;padding:10px 12px;background:var(--navy3);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px;resize:vertical;direction:rtl;line-height:1.7"></textarea>
+      <div class="modal-actions" style="margin-top:12px">
+        <button class="btn btn-gold" onclick="confirmWaSend()" style="flex:1;justify-content:center;font-size:14px;padding:10px">📲 إرسال</button>
+        <button class="btn btn-outline" onclick="closeModal('waSendModal')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Quick field adder modal -->
 <div id="quickFieldModal" style="display:none">
   <div class="modal-overlay">
@@ -1145,6 +1160,7 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
         <button class="wa-btn" onclick="selWaStage('تنفيذ',this)">⚙️ تنفيذ</button>
         <button class="wa-btn" onclick="selWaStage('تسليم',this)">✅ جاهز للاستلام</button>
         <button class="wa-btn" onclick="selWaStage('تم_تسليم',this)">🤝 تم التسليم</button>
+        <button class="wa-btn" onclick="selWaStage('تأخير',this)">⏰ اعتذار تأخير</button>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:6px">
         متغيرات: <span style="color:var(--gold)">{الاسم} {نوع_المعاملة} {الرقم} {التاريخ} {الرصيد}</span>
@@ -3521,16 +3537,11 @@ function previewReport(){
       <div style="overflow-x:auto">
         <table class="rtable">
           <thead><tr>
-            <th style="white-space:nowrap">#</th>
+            <th style="white-space:nowrap">رقم المعاملة</th>
             <th>التاريخ</th>
             <th>نوع المعاملة</th>
             <th>اسم المواطن</th>
-            <th>اسم الأب</th>
-            <th>الشهرة</th>
             <th>الهاتف</th>
-            <th>رقم السجل</th>
-            <th>تاريخ الميلاد</th>
-            <th>بلدة القيد</th>
           </tr></thead>
           <tbody>
             ${list.map(t=>{
@@ -3540,12 +3551,7 @@ function previewReport(){
                 <td style="white-space:nowrap;direction:ltr;text-align:right">${t.date||'—'}</td>
                 <td>${t.type||'—'}</td>
                 <td style="font-weight:600;color:var(--text)">${citName(cit)||t.citName||'—'}</td>
-                <td>${cit.fatherName||'—'}</td>
-                <td>${cit.lastName||'—'}</td>
                 <td style="direction:ltr;text-align:right">${t.phone||cit.phone||'—'}</td>
-                <td>${cit.registryNum||'—'}</td>
-                <td style="white-space:nowrap">${cit.dob||'—'}</td>
-                <td>${cit.regTown||cit.town||'—'}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -3564,18 +3570,13 @@ function printReport(){
       <td style="direction:ltr;text-align:center;white-space:nowrap">${t.date||'—'}</td>
       <td>${(t.type||'—').replace(/</g,'&lt;')}</td>
       <td style="font-weight:600">${(citName(cit)||t.citName||'—').replace(/</g,'&lt;')}</td>
-      <td>${(cit.fatherName||'—').replace(/</g,'&lt;')}</td>
-      <td>${(cit.lastName||'—').replace(/</g,'&lt;')}</td>
       <td style="direction:ltr;text-align:center">${(t.phone||cit.phone||'—').replace(/</g,'&lt;')}</td>
-      <td style="text-align:center">${(cit.registryNum||'—').replace(/</g,'&lt;')}</td>
-      <td style="text-align:center;white-space:nowrap">${(cit.dob||'—').replace(/</g,'&lt;')}</td>
-      <td>${(cit.regTown||cit.town||'—').replace(/</g,'&lt;')}</td>
     </tr>`;
   }).join('');
   const html=`<!DOCTYPE html><html dir="rtl" lang="ar"><head><meta charset="UTF-8">
 <title>${label}</title>
 <style>
-  @page{size:A4 landscape;margin:15mm 12mm;}
+  @page{size:A4;margin:15mm 14mm;}
   *{box-sizing:border-box;}
   body{font-family:'Tahoma','Arial',sans-serif;direction:rtl;color:#111;margin:0;padding:0;font-size:12px;}
   .header{border-bottom:3px solid #C9A84C;padding-bottom:10px;margin-bottom:14px;display:flex;align-items:flex-start;justify-content:space-between;}
@@ -3620,13 +3621,8 @@ function printReport(){
     <th>رقم المعاملة</th>
     <th>التاريخ</th>
     <th>نوع المعاملة</th>
-    <th>الاسم</th>
-    <th>اسم الأب</th>
-    <th>الشهرة</th>
+    <th>اسم المواطن</th>
     <th>الهاتف</th>
-    <th>رقم السجل</th>
-    <th>تاريخ الميلاد</th>
-    <th>بلدة القيد</th>
   </tr></thead>
   <tbody>${rows}</tbody>
 </table>
@@ -4835,7 +4831,7 @@ function renderTxnTable(list){
       <td style="color:#7DCCA0">${(t.paid||0).toLocaleString()}</td>
       <td style="color:${(t.cost-t.paid)>0?'#E88080':'#7DCCA0'}">${((t.cost||0)-(t.paid||0)).toLocaleString()}</td>
       <td><div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="تعديل الدفع / إضافة دفعة / سجل الدفعات">${payChip(t)}</span></div></td>
-      <td><div style='display:flex;gap:3px;align-items:center;flex-wrap:nowrap'>${txnStageBtns(t)}<span style="width:1px;height:16px;background:var(--border);margin:0 1px"></span><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px' title='واتساب: استلام'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px' title='واتساب: قيد الإنجاز'>⏳</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px' title='واتساب: جاهزة'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)' title='واتساب: تم التسليم'>🤝</button><button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px' title='حذف'>🗑️</button></div></td>
+      <td><div style='display:flex;gap:3px;align-items:center;flex-wrap:nowrap'>${txnStageBtns(t)}<span style="width:1px;height:16px;background:var(--border);margin:0 1px"></span><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px' title='واتساب: استلام'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px' title='واتساب: قيد الإنجاز'>⏳</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px' title='واتساب: جاهزة'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)' title='واتساب: تم التسليم'>🤝</button><button class='btn' onclick="sendWhatsAppEditable('${t.id}','تأخير')" style='font-size:10px;padding:3px 5px;background:rgba(232,128,76,0.15);color:#E8804C;border:1px solid rgba(232,128,76,0.4)' title='اعتذار تأخير (قابل للتعديل قبل الإرسال)'>⏰</button><button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px' title='حذف'>🗑️</button></div></td>
     </tr>`).join('');
 }
 function applyTxnFilters(){
@@ -7361,7 +7357,8 @@ const WA_DEFAULT={
   'استلام':   'السيد/ة {الاسم} المحترم/ة،\n\nنُعلمكم بأننا استلمنا معاملتكم:\n\u{1F4CB} *{نوع_المعاملة}*\nالرقم: *#{الرقم}*\nالتاريخ: {التاريخ}\n\nسنتواصل معكم فور الإنجاز.\nشكراً لثقتكم.\n\nمكتب المختار \u{1F332}',
   'تنفيذ':    'السيد/ة {الاسم} المحترم/ة،\n\nمعاملتكم قيد الإنجاز:\n\u{23F3} *{نوع_المعاملة}*\nالرقم: *#{الرقم}*\n\nسنُعلمكم فور الانتهاء.\n\nمكتب المختار \u{1F332}',
   'تسليم':    'السيد/ة {الاسم} المحترم/ة،\n\n\u{2705} معاملتكم جاهزة للاستلام:\n\u{1F4CB} *{نوع_المعاملة}*\nالرقم: *#{الرقم}*\n{الرصيد}\n\nيُرجى المراجعة في أقرب وقت.\n\nمكتب المختار \u{1F332}',
-  'تم_تسليم': 'السيد/ة {الاسم} المحترم/ة،\n\n\u{1F91D} تم تسليم معاملتكم بنجاح:\n\u{1F4CB} *{نوع_المعاملة}*\nالرقم: *#{الرقم}*\nالتاريخ: {التاريخ}\n\nنشكركم على ثقتكم بمكتبنا.\n\nمكتب المختار \u{1F332}'
+  'تم_تسليم': 'السيد/ة {الاسم} المحترم/ة،\n\n\u{1F91D} تم تسليم معاملتكم بنجاح:\n\u{1F4CB} *{نوع_المعاملة}*\nالرقم: *#{الرقم}*\nالتاريخ: {التاريخ}\n\nنشكركم على ثقتكم بمكتبنا.\n\nمكتب المختار \u{1F332}',
+  'تأخير':    'السيد/ة {الاسم} المحترم/ة،\n\nنعتذر عن التأخير في إنجاز معاملتكم:\n\u{23F3} *{نوع_المعاملة}*\nالرقم: *#{الرقم}*\n\nمعاملتكم قيد المتابعة وسننجزها في أقرب وقت. نشكر تفهّمكم وحسن ثقتكم.\n\nمكتب المختار \u{1F332}'
 };
 let _waStage='استلام';
 
@@ -7412,6 +7409,26 @@ function _waGo(url){
     }
   }catch(_e){}
   window.open(url,'_blank');
+}
+// إرسال قابل للتعديل: يعرض الرسالة بمربّع تعديل قبل الإرسال (لإضافة سبب/تغيير لهذه المرة فقط)
+let _waSendData=null;
+function sendWhatsAppEditable(txnId,stage){
+  const t=transactions.find(x=>x.id===txnId);
+  if(!t){notify('المعاملة غير موجودة','red');return;}
+  let phone=t.phone||'';
+  if(!phone){ phone=prompt('أدخل رقم الواتساب (مثال: 9613456789):',''); if(!phone||!phone.trim())return; t.phone=phone.trim(); saveTxns(); phone=t.phone; }
+  _waSendData={phone:phone};
+  document.getElementById('waSendText').value=_fillWa(_getWaTmpl(stage),t);
+  document.getElementById('waSendTitle').textContent='✏️ '+(stage==='تأخير'?'اعتذار عن التأخير':'رسالة واتساب')+' — #'+formatSerial(t.serial);
+  document.getElementById('waSendModal').style.display='block';
+  setTimeout(function(){const el=document.getElementById('waSendText');if(el)el.focus();},120);
+}
+function confirmWaSend(){
+  if(!_waSendData)return;
+  const txt=document.getElementById('waSendText').value||'';
+  const ph=_waSendData.phone; _waSendData=null;
+  closeModal('waSendModal');
+  _waSend(ph,txt);
 }
 function sendWhatsApp(txnId,stage){
   const t=transactions.find(x=>x.id===txnId);
