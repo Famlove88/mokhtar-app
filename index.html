@@ -2910,7 +2910,7 @@ function renderAgentsPage(){
       ${agents.length===0?`<div class="empty-state" style="height:300px"><div class="e-icon">🧑‍💼</div><h3>لا مندوبون بعد</h3><p>أضف أول مندوب لتتبع معاملاته</p></div>`:''}
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">
         ${agents.map(ag=>{
-          const pending=ag.items.filter(i=>i.status==='قيد الإنجاز').length;
+          const pending=ag.items.filter(i=>i.status==='قيد الإنجاز').length + _agentTxns(ag.id).length;
           const done=ag.items.filter(i=>i.status==='مسترجع').length;
           const totalOwed=ag.items.filter(i=>i.cost>0).reduce((s,i)=>s+(i.cost||0),0);
           const totalPaid=ag.payments.reduce((s,p)=>s+(p.amount||0),0);
@@ -2976,6 +2976,21 @@ function renderAgentDetail(){
       <div class="stat-card green" style="padding:12px"><div class="sc-label">إجمالي المدفوع</div><div class="sc-value" style="font-size:16px">${totalPaid.toLocaleString()} ل.ل</div></div>
       <div class="stat-card ${balance>0?'red':'green'}" style="padding:12px"><div class="sc-label">${balance>0?'المستحق للمندوب':'الرصيد'}</div><div class="sc-value" style="font-size:16px;color:${balance>0?'#E88080':'#7DCCA0'}">${Math.abs(balance).toLocaleString()} ل.ل</div></div>
     </div>
+
+    ${(()=>{const ats=_agentTxns(ag.id);if(!ats.length)return '';return `
+    <div style="padding:0 24px;margin:10px 0 4px">
+      <div class="recent-card" style="padding:13px;border:1px solid rgba(224,164,76,0.35)">
+        <div style="font-size:12px;font-weight:700;color:#E0A44C;margin-bottom:10px">🚚 معاملات محوّلة إليه من المكتب — بانتظار الاسترجاع (${ats.length})</div>
+        ${ats.map(t=>{const cit=t.citId?citizens.find(c=>c.id===t.citId):null;return `
+          <div style="background:var(--navy2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="flex:1;min-width:180px">
+              <div style="font-size:13px;font-weight:700;color:var(--text)">${esc(t.type||'—')} <span style="color:var(--gold);font-size:11px">#${formatSerial(t.serial)}</span></div>
+              <div style="font-size:11px;color:var(--text3);margin-top:3px">👤 ${esc(t.citName||(cit?citName(cit):'—'))} · 📅 ${t.date||'—'}${txnBuy(t)>0?` · تكلفة: <span style="color:#E0A44C">${txnBuy(t).toLocaleString()} ل.ل</span>`:''}</div>
+            </div>
+            <button class="btn btn-green" onclick="receiveTxnFromAgent('${t.id}')" style="font-size:11px;padding:5px 10px" title="استُرجعت المعاملة → تصبح جاهزة للتسليم">📥 استلمت من المندوب</button>
+          </div>`;}).join('')}
+      </div>
+    </div>`;})()}
 
     <div class="tabs-bar">
       <button class="tab active" onclick="swAgentTab('items',this)">📦 البنود المرسلة (${ag.items.length})</button>
@@ -4719,7 +4734,11 @@ function _reRenderTxnViews(){
   if(currentPage==='transactions')renderTransactionsPage();
   else if(currentPage==='dashboard')renderDashboard();
   else if(currentPage==='citizen_detail')renderCitizenDetail();
+  else if(currentPage==='agent_detail')renderAgentDetail();
 }
+// معاملات محوّلة لمندوب معيّن — تُشتَق من المعاملة نفسها (مصدر حقيقة واحد، لا drift)
+function _agentTxns(agId){ return transactions.filter(t=>t.agentId===agId && txnStage(t)==='عند المندوب'); }
+function receiveTxnFromAgent(id){ advanceTxnStage(id,'جاهزة'); } // ترجع "جاهزة" فتختفي من ملف المندوب
 // أزرار المرحلة السياقية (تُظهر الخطوة التالية فقط — نظيفة على الموبايل)
 function txnStageBtns(t){
   const s=txnStage(t);
