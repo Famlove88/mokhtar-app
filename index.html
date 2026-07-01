@@ -3273,7 +3273,7 @@ function renderAgentsPage(){
         ${agents.map(ag=>{
           const pending=ag.items.filter(i=>i.status==='قيد الإنجاز').length + _agentTxns(ag.id).length;
           const done=ag.items.filter(i=>i.status==='مسترجع').length;
-          const totalOwed=ag.items.filter(i=>i.cost>0).reduce((s,i)=>s+(i.cost||0),0);
+          const totalOwed=ag.items.filter(i=>i.cost>0).reduce((s,i)=>s+(i.cost||0),0)+agentConfirmedOwed(ag.id);
           const totalPaid=ag.payments.reduce((s,p)=>s+(p.amount||0),0);
           const balance=totalOwed-totalPaid;
           return`<div class="stat-card" style="cursor:pointer;padding:18px;border-color:${pending>0?'rgba(201,168,76,0.4)':'var(--border)'}" onclick="selectAgent('${ag.id}')">
@@ -3305,9 +3305,10 @@ function renderAgentDetail(){
   const ag=agents.find(a=>a.id===currentAgentId);
   if(!ag){renderAgentsPage();return;}
   const mp=document.getElementById('mainPanel');
-  const totalOwed=ag.items.filter(i=>i.cost>0).reduce((s,i)=>s+(i.cost||0),0);
+  const totalOwed=ag.items.filter(i=>i.cost>0).reduce((s,i)=>s+(i.cost||0),0)+agentConfirmedOwed(ag.id);
   const totalPaid=ag.payments.reduce((s,p)=>s+(p.amount||0),0);
   const balance=totalOwed-totalPaid;
+  const pendingOwed=agentPendingOwed(ag.id);
   const pending=ag.items.filter(i=>i.status==='قيد الإنجاز');
   const returned=ag.items.filter(i=>i.status==='مسترجع');
   const rejected=ag.items.filter(i=>i.status==='مرفوض');
@@ -3337,7 +3338,7 @@ function renderAgentDetail(){
       <div class="stat-card green" style="padding:12px"><div class="sc-label">إجمالي المدفوع</div><div class="sc-value" style="font-size:16px">${totalPaid.toLocaleString()} ل.ل</div></div>
       <div class="stat-card ${balance>0?'red':'green'}" style="padding:12px"><div class="sc-label">${balance>0?'المستحق للمندوب':'الرصيد'}</div><div class="sc-value" style="font-size:16px;color:${balance>0?'#E88080':'#7DCCA0'}">${Math.abs(balance).toLocaleString()} ل.ل</div></div>
     </div>
-
+    ${pendingOwed>0?`<div style="padding:0 24px;margin-bottom:6px"><div style="background:rgba(224,164,76,0.08);border:1px solid rgba(224,164,76,0.3);border-radius:8px;padding:8px 12px;font-size:11.5px;color:#E0A44C">⏳ تكلفة معاملات لا تزال عنده (لم تُستلم بعد): <strong>${pendingOwed.toLocaleString()} ل.ل</strong> — ستُضاف للمستحق عند الاستلام وتأكيد التكلفة.</div></div>`:''}
     ${(()=>{const ats=_agentTxns(ag.id);if(!ats.length)return '';return `
     <div style="padding:0 24px;margin:10px 0 4px">
       <div class="recent-card" style="padding:13px;border:1px solid rgba(224,164,76,0.35)">
@@ -3550,14 +3551,18 @@ function saveAgentPayment(){
   const amount=parseFloat(document.getElementById('agPayAmount').value)||0;
   if(!amount){notify('❌ أدخل المبلغ','red');return;}
   const ag=agents.find(a=>a.id===agId);if(!ag)return;
-  ag.payments.push({id:'ap_'+Date.now(),date:document.getElementById('agPayDate').value,amount,note:document.getElementById('agPayNote').value.trim()});
-  saveAgents();closeModal('agentPayModal');renderAgentDetail();notify('✅ تم تسجيل الدفعة');
+  const payId='ap_'+Date.now();
+  const pdate=document.getElementById('agPayDate').value;
+  ag.payments.push({id:payId,date:pdate,amount,note:document.getElementById('agPayNote').value.trim()});
+  cashEntries.push({id:'c_'+payId,type:'صادر',amount:amount,desc:'دفعة للمندوب: '+ag.name,date:pdate||todayStr(),time:nowTime(),ref:payId}); // خصم من الصندوق
+  saveAgents();saveCash();closeModal('agentPayModal');renderAgentDetail();notify('✅ سُجّلت الدفعة وخُصمت من الصندوق');
 }
 function deleteAgentPayment(agId,payId){
   if(!confirm('حذف هذه الدفعة؟'))return;
   const ag=agents.find(a=>a.id===agId);if(!ag)return;
   ag.payments=ag.payments.filter(p=>p.id!==payId);
-  saveAgents();renderAgentDetail();notify('🗑️ تم الحذف');
+  cashEntries=cashEntries.filter(c=>c.ref!==payId); // احذف قيد الصندوق المرتبط
+  saveAgents();saveCash();renderAgentDetail();notify('🗑️ تم الحذف');
 }
 
 // ===== PERMISSIONS PAGE =====
@@ -4460,6 +4465,14 @@ function renderDashboard(){
       <div class="page-actions"><button class="btn btn-outline" onclick="openAddModal()">+ مواطن جديد</button><button class="btn btn-gold" onclick="openTxnModal()">📑 معاملة جديدة</button></div>
     </div>
     <div class="panel-content">
+      ${(()=>{const late=txnLateList();if(!late.length)return '';const red=late.filter(t=>txnAgeLevel(t)===2).length,yel=late.filter(t=>txnAgeLevel(t)===1).length;return `
+      <div onclick="showPage('transactions',document.querySelector('[data-page=transactions]'))" style="cursor:pointer;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;padding:12px 16px;border-radius:12px;background:linear-gradient(135deg,rgba(201,76,76,0.12),rgba(224,164,76,0.06));border:1px solid rgba(201,76,76,0.3)">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(201,76,76,0.18);display:flex;align-items:center;justify-content:center;font-size:17px">⏰</div>
+        <div style="flex:1;min-width:160px"><div style="font-size:13px;font-weight:800;color:#E88080">${late.length} معاملة متأخّرة تحتاج متابعة</div><div style="font-size:10.5px;color:var(--text3);margin-top:1px">اضغط لعرضها ومتابعتها</div></div>
+        ${red?`<span style="background:rgba(201,76,76,0.15);color:#E88080;font-weight:700;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid rgba(201,76,76,0.3)">🔴 ${red}</span>`:''}
+        ${yel?`<span style="background:rgba(224,164,76,0.15);color:#E0A44C;font-weight:700;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid rgba(224,164,76,0.3)">🟡 ${yel}</span>`:''}
+        <span style="color:var(--text3);font-size:16px">←</span>
+      </div>`;})()}
 
       <!-- Main stats -->
       <div class="dash-grid">
@@ -5240,10 +5253,24 @@ function _agentTxns(agId){
   });
 }
 function receiveTxnFromAgent(id){
-  const t=transactions.find(x=>x.id===id);
-  if(t&&Array.isArray(t.agentChain)){ const active=t.agentChain.find(l=>l.status==='active'); if(active){ active.status='done'; active.doneAt=Date.now(); } }
+  const t=transactions.find(x=>x.id===id); if(!t)return;
+  if(Array.isArray(t.agentChain)){
+    const active=t.agentChain.find(l=>l.status==='active');
+    if(active){
+      const ag=agents.find(a=>a.id===active.agentId);
+      const v=prompt('كم صار على هذه المعاملة فعلياً'+(ag?' عند '+ag.name:'')+'؟ (ل.ل)\nاتركه كما هو إن لم يتغيّر — التكلفة الحالية: '+((+active.cost||0).toLocaleString()), (active.cost||''));
+      if(v===null) return; // ألغى
+      if(v.trim()!=='') active.cost=parseFloat(v)||0;
+      active.status='done'; active.doneAt=Date.now();
+      t.profit=(+t.paid||0)-txnBuy(t);
+      saveTxns();
+    }
+  }
   advanceTxnStage(id,'جاهزة');
 } // ترجع "جاهزة" فتختفي من ملف المندوب
+// ─── مستحقات المندوب الموحّدة: مؤكّدة (استُلمت) + معلّقة (لسا عنده) ───
+function agentConfirmedOwed(agId){ let s=0; transactions.forEach(t=>{ if(Array.isArray(t.agentChain))t.agentChain.forEach(l=>{if(l.agentId===agId&&l.status==='done')s+=(+l.cost||0);}); if(Array.isArray(t.subItems))t.subItems.forEach(i=>{if(i.agentId===agId&&i.status==='مسترجع')s+=(+i.agentCost||0);}); }); return s; }
+function agentPendingOwed(agId){ let s=0; transactions.forEach(t=>{ if(Array.isArray(t.agentChain))t.agentChain.forEach(l=>{if(l.agentId===agId&&l.status==='active')s+=(+l.cost||0);}); if(Array.isArray(t.subItems))t.subItems.forEach(i=>{if(i.agentId===agId&&i.status!=='مسترجع')s+=(+i.agentCost||0);}); }); return s; }
 // ═══════ نظام التقادم (Aging) — العمر = كم يوم في المرحلة الحالية ═══════
 function _txnRefTime(t){
   if(t&&t.stageAt) return t.stageAt;                 // وقت آخر نقلة مرحلة
@@ -5341,26 +5368,35 @@ function renderTransactionsPage(){
       </div>
       ${(()=>{const late=txnLateList();if(!late.length)return '';
         const red=late.filter(t=>txnAgeLevel(t)===2).length, yel=late.filter(t=>txnAgeLevel(t)===1).length;
-        return `<div class="recent-card" style="margin-bottom:14px;padding:13px;border:1px solid rgba(201,76,76,0.4);background:linear-gradient(135deg,rgba(201,76,76,0.06),rgba(224,164,76,0.05))">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-            <div style="font-size:13px;font-weight:800;color:#E88080">⏰ معاملات متأخّرة تحتاج متابعة (${late.length})</div>
-            <div style="display:flex;gap:10px;font-size:11px">
-              <span style="color:#E88080;font-weight:700">🔴 ${red} متأخّرة جداً (7+ أيام)</span>
-              <span style="color:#E0A44C;font-weight:700">🟡 ${yel} تأخّرت (3+ أيام)</span>
+        return `<div style="margin-bottom:16px;border-radius:14px;overflow:hidden;border:1px solid rgba(201,76,76,0.3);box-shadow:0 4px 16px rgba(201,76,76,0.08)">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:13px 16px;background:linear-gradient(135deg,rgba(201,76,76,0.14),rgba(224,164,76,0.08))">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:36px;height:36px;border-radius:10px;background:rgba(201,76,76,0.18);display:flex;align-items:center;justify-content:center;font-size:18px">⏰</div>
+              <div>
+                <div style="font-size:13.5px;font-weight:800;color:#E88080">معاملات متأخّرة تحتاج متابعة</div>
+                <div style="font-size:10.5px;color:var(--text3);margin-top:1px">${late.length} معاملة — رتّبناها الأقدم أولاً</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:7px">
+              ${red?`<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(201,76,76,0.15);color:#E88080;font-weight:700;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid rgba(201,76,76,0.3)">🔴 ${red} · 7+ أيام</span>`:''}
+              ${yel?`<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(224,164,76,0.15);color:#E0A44C;font-weight:700;font-size:11px;padding:4px 11px;border-radius:20px;border:1px solid rgba(224,164,76,0.3)">🟡 ${yel} · 3+ أيام</span>`:''}
             </div>
           </div>
-          <div style="max-height:300px;overflow-y:auto">
+          <div style="max-height:320px;overflow-y:auto;padding:10px 12px;background:var(--navy2)">
             ${late.map(t=>{const lvl=txnAgeLevel(t),days=txnAgeDays(t),s=txnStage(t);
-              const cl=lvl===2?'#E88080':'#E0A44C', bg=lvl===2?'rgba(201,76,76,0.08)':'rgba(224,164,76,0.08)', bd=lvl===2?'rgba(201,76,76,0.25)':'rgba(224,164,76,0.25)';
+              const cl=lvl===2?'#E88080':'#E0A44C', bg=lvl===2?'rgba(201,76,76,0.06)':'rgba(224,164,76,0.06)', bd=lvl===2?'rgba(201,76,76,0.22)':'rgba(224,164,76,0.22)';
+              const ag=agents.find(a=>a.id===t.agentId);
               let btn='';
-              if(s==='عند المندوب'){const ag=agents.find(a=>a.id===t.agentId);btn=`<button class="btn" onclick="remindAgentAboutTxn('${t.id}')" style="font-size:10.5px;padding:4px 9px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35);white-space:nowrap">📲 ذكّر المندوب${ag?' ('+esc(ag.name)+')':''}</button>`;}
-              else if(s==='جاهزة'){btn=`<button class="btn" onclick="sendWhatsAppEditable('${t.id}','تسليم')" style="font-size:10.5px;padding:4px 9px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35);white-space:nowrap">📲 ذكّر المواطن للاستلام</button>`;}
-              else {btn=`<button class="btn" onclick="sendWhatsAppEditable('${t.id}','تأخير')" style="font-size:10.5px;padding:4px 9px;background:rgba(232,128,76,0.15);color:#E8804C;border:1px solid rgba(232,128,76,0.4);white-space:nowrap">⏰ اعتذار للمواطن</button>`;}
-              return `<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:${bg};border:1px solid ${bd};border-radius:9px;padding:9px 11px;margin-bottom:6px">
-                <div style="flex:1;min-width:170px">
+              if(s==='عند المندوب'){btn=`<button class="btn" onclick="remindAgentAboutTxn('${t.id}')" style="font-size:11px;padding:6px 13px;border-radius:20px;background:#25D366;color:#052e16;border:none;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(37,211,102,0.25)">📲 ذكّر المندوب</button>`;}
+              else if(s==='جاهزة'){btn=`<button class="btn" onclick="sendWhatsAppEditable('${t.id}','تسليم')" style="font-size:11px;padding:6px 13px;border-radius:20px;background:#25D366;color:#052e16;border:none;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(37,211,102,0.25)">📲 ذكّر المواطن</button>`;}
+              else {btn=`<button class="btn" onclick="sendWhatsAppEditable('${t.id}','تأخير')" style="font-size:11px;padding:6px 13px;border-radius:20px;background:#E8804C;color:#2a1206;border:none;font-weight:700;white-space:nowrap;box-shadow:0 2px 8px rgba(232,128,76,0.25)">⏰ اعتذار للمواطن</button>`;}
+              return `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:${bg};border:1px solid ${bd};border-radius:11px;padding:11px 13px;margin-bottom:7px">
+                <div style="width:8px;height:8px;border-radius:50%;background:${cl};flex-shrink:0;box-shadow:0 0 8px ${cl}"></div>
+                <div style="flex:1;min-width:160px">
                   <div style="font-size:12.5px;font-weight:700;color:var(--text)">${txnKind(t)==='private'?'🚗 '+formatSerial(t.serial):'#'+formatSerial(t.serial)} · ${esc(t.type||'—')}</div>
-                  <div style="font-size:10.5px;color:var(--text3);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">👤 ${esc(t.citName||'—')} · ${stageChip(t)} · <span style="color:${cl};font-weight:700">منذ ${days} يوم</span></div>
+                  <div style="font-size:10.5px;color:var(--text3);margin-top:3px">👤 ${esc(t.citName||'—')}${ag&&s==='عند المندوب'?' · 🚚 '+esc(ag.name):''} · ${TXN_STAGES[s]?TXN_STAGES[s].label:s}</div>
                 </div>
+                <span style="font-size:11px;font-weight:800;color:${cl};background:${lvl===2?'rgba(201,76,76,0.12)':'rgba(224,164,76,0.12)'};padding:3px 10px;border-radius:16px;white-space:nowrap">منذ ${days} يوم</span>
                 ${btn}
               </div>`;}).join('')}
           </div>
@@ -5396,7 +5432,7 @@ function renderTxnTable(list){
       <td>${(t.cost||0).toLocaleString()}</td>
       <td style="color:#7DCCA0">${(t.paid||0).toLocaleString()}</td>
       <td style="color:${(t.cost-t.paid)>0?'#E88080':'#7DCCA0'}">${((t.cost||0)-(t.paid||0)).toLocaleString()}</td>
-      <td><div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="تعديل الدفع / إضافة دفعة / سجل الدفعات">${payChip(t)}</span></div></td>
+      <td><div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="تعديل الدفع / إضافة دفعة / سجل الدفعات">${payChip(t)}</span>${t.agentId&&txnStage(t)==='عند المندوب'?`<span style="font-size:9px;color:#E0A44C;font-weight:700" title="المندوب الحالي">🚚 ${esc((agents.find(a=>a.id===t.agentId)||{}).name||'—')}</span>`:''}</div></td>
       <td><div style='display:flex;gap:3px;align-items:center;flex-wrap:nowrap'>${txnStageBtns(t)}<span style="width:1px;height:16px;background:var(--border);margin:0 1px"></span><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px' title='واتساب: استلام'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px' title='واتساب: قيد الإنجاز'>⏳</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px' title='واتساب: جاهزة'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)' title='واتساب: تم التسليم'>🤝</button><button class='btn' onclick="sendWhatsAppEditable('${t.id}','تأخير')" style='font-size:10px;padding:3px 5px;background:rgba(232,128,76,0.15);color:#E8804C;border:1px solid rgba(232,128,76,0.4)' title='اعتذار تأخير (قابل للتعديل قبل الإرسال)'>⏰</button>${Array.isArray(t.subItems)&&t.subItems.length?`<button class='btn' onclick="openSubItems('${t.id}')" style='font-size:10px;padding:3px 5px;background:rgba(224,164,76,0.15);color:#E0A44C;border:1px solid rgba(224,164,76,0.4)' title='بنود الخدمة (${t.subItems.filter(i=>i.status==='مسترجع').length}/${t.subItems.length})'>🧩</button>`:''}<button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px' title='حذف'>🗑️</button></div></td>
     </tr>`).join('');
 }
