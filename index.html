@@ -1069,6 +1069,20 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
   </div>
 </div>
 
+<!-- تحويل لمندوب (سلسلة تسلسلية بتكلفة لكل مندوب) -->
+<div id="agentTransferModal" style="display:none">
+  <div class="modal-overlay">
+    <div class="modal-box" style="width:420px;max-width:94vw;max-height:90vh;overflow-y:auto">
+      <div class="modal-title" id="agentTransferTitle">🚚 تحويل لمندوب</div>
+      <div id="agentTransferBody"></div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button class="btn btn-gold" onclick="confirmAgentTransfer()" style="flex:1;justify-content:center;font-size:14px;padding:10px">✓ تأكيد التحويل</button>
+        <button class="btn btn-outline" onclick="closeModal('agentTransferModal')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Quick field adder modal -->
 <div id="quickFieldModal" style="display:none">
   <div class="modal-overlay">
@@ -4754,8 +4768,9 @@ function nextPrivateSerial(){
   return 'S-'+String(mx+1).padStart(3,'0');
 }
 // ─── الربح: التكلفة تُسترجَع أولاً من المحصّل، وما يزيد هو الربح المحقّق ───
-function txnBuy(t){ // تكلفة المكتب الفعلية — للخدمة الخاصة متعددة البنود = مجموع تكاليف البنود
-  if(t&&Array.isArray(t.subItems)&&t.subItems.length) return t.subItems.reduce((s,i)=>s+(+i.agentCost||0),0);
+function txnBuy(t){ // تكلفة المكتب الفعلية
+  if(t&&Array.isArray(t.subItems)&&t.subItems.length) return t.subItems.reduce((s,i)=>s+(+i.agentCost||0),0);       // خدمة بنود (بالتوازي)
+  if(t&&Array.isArray(t.agentChain)&&t.agentChain.length) return t.agentChain.reduce((s,l)=>s+(+l.cost||0),0);       // سلسلة مناديب (بالتسلسل)
   return (+t.buyCost||0) || (+t.totalAgentCost||0);
 }
 // ─── بنود الخدمة الخاصة (بناء داخل المودال) ───
@@ -4841,18 +4856,69 @@ function advanceTxnStage(id,newStage){
   _reRenderTxnViews();
 }
 // تحويل لمندوب: نحفظ agentId + المرحلة على المعاملة نفسها (مصدر حقيقة واحد — لا drift)
-function assignTxnAgent(id){
-  const t=transactions.find(x=>x.id===id); if(!t)return;
+function assignTxnAgent(id){ openAgentTransfer(id); } // متوافق مع النداءات القديمة
+// ═══════ سلسلة المناديب: كل حلقة إلها تكلفتها، والمعاملة تنتقل بالتسلسل ═══════
+function _txnChain(t){ if(!Array.isArray(t.agentChain))t.agentChain=[]; return t.agentChain; }
+let _transferTxnId=null;
+function openAgentTransfer(txnId){
+  const t=transactions.find(x=>x.id===txnId); if(!t)return;
   if(!agents.length){notify('⚠️ لا يوجد مناديب — أضف مندوباً أولاً من صفحة المناديب','warn');return;}
-  const pick=prompt('اختر رقم المندوب لتحويل المعاملة إليه:\n\n'+agents.map((a,i)=>`${i+1}. ${a.name}`).join('\n'),'1');
-  if(!pick)return;
-  const idx=parseInt(pick)-1;
-  if(isNaN(idx)||idx<0||idx>=agents.length){notify('❌ رقم غير صحيح','red');return;}
-  t.agentId=agents[idx].id; t.stage='عند المندوب'; t.stageAt=Date.now();
+  _transferTxnId=txnId;
+  renderAgentTransfer();
+  document.getElementById('agentTransferModal').style.display='block';
+}
+function renderAgentTransfer(){
+  const t=transactions.find(x=>x.id===_transferTxnId); if(!t)return;
+  const ch=_txnChain(t);
+  const active=ch.find(l=>l.status==='active');
+  const isFirst=!active && ch.length===0;
+  const currentAgentId=active?active.agentId:null;
+  document.getElementById('agentTransferTitle').textContent=(isFirst?'🚚 تحويل لمندوب':'↪️ تحويل لمندوب آخر')+' — #'+formatSerial(t.serial);
+  let chainHtml='';
+  if(ch.length){
+    chainHtml=`<div style="background:var(--navy3);border:1px solid var(--border);border-radius:9px;padding:10px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--gold3);margin-bottom:7px">🔗 سلسلة المناديب</div>
+      ${ch.map((l,i)=>{const ag=agents.find(a=>a.id===l.agentId);const act=l.status==='active';return `<div style="display:flex;align-items:center;gap:8px;font-size:11.5px;padding:5px 0;${i>0?'border-top:1px dashed var(--border)':''}">
+        <span style="width:20px;height:20px;border-radius:50%;background:${act?'rgba(224,164,76,0.2)':'rgba(76,175,122,0.15)'};color:${act?'#E0A44C':'#7DCCA0'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">${act?'●':'✓'}</span>
+        <span style="flex:1;color:var(--text);font-weight:${act?'700':'400'}">${ag?esc(ag.name):'—'} ${act?'<span style="color:#E0A44C;font-size:10px">(الحالي)</span>':''}</span>
+        <span style="color:#E0A44C;font-weight:700">${(+l.cost||0).toLocaleString()} ل.ل</span>
+      </div>`;}).join('')}
+      <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;display:flex;justify-content:space-between;font-size:11.5px"><span style="color:var(--text3)">إجمالي التكلفة</span><strong style="color:#E0A44C">${ch.reduce((s,l)=>s+(+l.cost||0),0).toLocaleString()} ل.ل</strong></div>
+    </div>`;
+  }
+  document.getElementById('agentTransferBody').innerHTML=`
+    ${chainHtml}
+    ${active?`<div style="font-size:11px;color:var(--text2);margin-bottom:10px">المندوب الحالي سينهي دوره، وتنتقل المعاملة إلى المندوب الجديد.</div>`:''}
+    <div class="form-field" style="margin-bottom:10px">
+      <label>المندوب ${isFirst?'':'الجديد'}</label>
+      <select id="transferAgentSel" style="width:100%;padding:9px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Cairo,sans-serif;font-size:13px;direction:rtl">
+        <option value="">— اختر المندوب —</option>
+        ${agents.filter(a=>a.id!==currentAgentId).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-field">
+      <label>تكلفة هذا المندوب (ل.ل)</label>
+      <input type="number" id="transferCost" value="${(isFirst&&+t.buyCost)?(+t.buyCost):''}" placeholder="0" min="0" style="width:100%;padding:10px;background:var(--navy3);border:2px solid var(--border2);border-radius:8px;color:var(--text);font-size:16px;font-weight:700;text-align:center">
+    </div>
+  `;
+}
+function confirmAgentTransfer(){
+  const t=transactions.find(x=>x.id===_transferTxnId); if(!t)return;
+  const agentId=document.getElementById('transferAgentSel').value;
+  if(!agentId){notify('❌ اختر المندوب','red');return;}
+  const cost=parseFloat(document.getElementById('transferCost').value)||0;
+  const ch=_txnChain(t);
+  const active=ch.find(l=>l.status==='active');
+  if(active){ active.status='done'; active.doneAt=Date.now(); }
+  ch.push({agentId:agentId, cost:cost, at:Date.now(), status:'active'});
+  t.agentId=agentId; t.stage='عند المندوب'; t.stageAt=Date.now();
   if(!Array.isArray(t.stageLog))t.stageLog=[];
-  t.stageLog.push({s:'عند المندوب',at:Date.now(),ag:agents[idx].name});
+  const agName=(agents.find(a=>a.id===agentId)||{}).name;
+  t.stageLog.push({s:'عند المندوب',at:Date.now(),ag:agName});
+  t.profit=(+t.paid||0)-txnBuy(t);
   saveTxns();
-  notify('🚚 حُوّلت المعاملة #'+formatSerial(t.serial)+' إلى المندوب '+agents[idx].name);
+  closeModal('agentTransferModal');
+  notify('🚚 حُوّلت #'+formatSerial(t.serial)+' إلى '+agName);
   _reRenderTxnViews();
 }
 function _reRenderTxnViews(){
@@ -4870,7 +4936,11 @@ function _agentTxns(agId){
     return false;
   });
 }
-function receiveTxnFromAgent(id){ advanceTxnStage(id,'جاهزة'); } // ترجع "جاهزة" فتختفي من ملف المندوب
+function receiveTxnFromAgent(id){
+  const t=transactions.find(x=>x.id===id);
+  if(t&&Array.isArray(t.agentChain)){ const active=t.agentChain.find(l=>l.status==='active'); if(active){ active.status='done'; active.doneAt=Date.now(); } }
+  advanceTxnStage(id,'جاهزة');
+} // ترجع "جاهزة" فتختفي من ملف المندوب
 // ═══════ نظام التقادم (Aging) — العمر = كم يوم في المرحلة الحالية ═══════
 function _txnRefTime(t){
   if(t&&t.stageAt) return t.stageAt;                 // وقت آخر نقلة مرحلة
@@ -4900,10 +4970,12 @@ function remindAgentAboutTxn(txnId){
 // أزرار المرحلة السياقية (تُظهر الخطوة التالية فقط — نظيفة على الموبايل)
 function txnStageBtns(t){
   const s=txnStage(t);
+  const hasSubs=Array.isArray(t.subItems)&&t.subItems.length; // خدمة بنود = مناديب بالتوازي (لا سلسلة)
   const B=(oc,title,label,extra)=>`<button onclick="${oc}" title="${title}" style="font-size:10px;padding:3px 6px;border-radius:6px;${extra}">${label}</button>`;
   if(s==='ملغاة') return B(`advanceTxnStage('${t.id}','بالمكتب')`,'إرجاع','↩','background:rgba(76,139,201,0.15);color:#88BBE8;border:1px solid rgba(76,139,201,0.35)');
   let out='';
-  if(s==='بالمكتب') out+=B(`assignTxnAgent('${t.id}')`,'تحويل لمندوب','🚚',`background:${TXN_STAGES['عند المندوب'].bg};color:${TXN_STAGES['عند المندوب'].c};border:1px solid ${TXN_STAGES['عند المندوب'].bd}`);
+  if(s==='بالمكتب' && !hasSubs) out+=B(`openAgentTransfer('${t.id}')`,'تحويل لمندوب','🚚',`background:${TXN_STAGES['عند المندوب'].bg};color:${TXN_STAGES['عند المندوب'].c};border:1px solid ${TXN_STAGES['عند المندوب'].bd}`);
+  if(s==='عند المندوب' && !hasSubs) out+=B(`openAgentTransfer('${t.id}')`,'حوّل لمندوب آخر','↪️','background:rgba(76,139,201,0.15);color:#88BBE8;border:1px solid rgba(76,139,201,0.35)');
   let next=null,ic='';
   if(s==='بالمكتب'){next='جاهزة';ic='📦';}
   else if(s==='عند المندوب'){next='جاهزة';ic='📥';}
