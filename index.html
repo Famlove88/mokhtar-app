@@ -1422,7 +1422,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 26 · 2026-07-02'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 27 · 2026-07-02'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;});}catch(_e){}
 const SERIAL_START=26112;
@@ -5145,17 +5145,46 @@ function renderSubItemsModal(){
       <div style="margin-top:9px;height:7px;background:var(--navy2);border-radius:4px;overflow:hidden"><div style="height:100%;width:${items.length?Math.round(done/items.length*100):0}%;background:#7DCCA0;transition:width .3s"></div></div>
       <div style="font-size:10.5px;color:var(--text3);margin-top:5px">${done} من ${items.length} بند مكتمل</div>
     </div>
-    ${items.map(it=>{const ag=agents.find(a=>a.id===it.agentId);const d=it.status==='مسترجع';return `
-      <div style="display:flex;align-items:center;gap:10px;background:${d?'rgba(76,175,122,0.08)':'var(--navy2)'};border:1px solid ${d?'rgba(76,175,122,0.3)':'var(--border)'};border-radius:9px;padding:10px 11px;margin-bottom:6px">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12.5px;font-weight:700;color:var(--text)">${d?'✓ ':''}${esc(it.desc||'بند')}</div>
-          <div style="font-size:10.5px;color:var(--text3);margin-top:2px">🚚 ${ag?esc(ag.name):'بلا مندوب'} · ${(+it.agentCost||0).toLocaleString()} ل.ل</div>
+    ${items.map(it=>{const d=it.status==='مسترجع';return `
+      <div style="background:${d?'rgba(76,175,122,0.08)':'var(--navy2)'};border:1px solid ${d?'rgba(76,175,122,0.3)':'var(--border)'};border-radius:9px;padding:10px 11px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <div style="flex:1;min-width:130px;font-size:12.5px;font-weight:700;color:var(--text)">${d?'✓ ':''}${esc(it.desc||'بند')}</div>
+          <button class="btn" onclick="toggleSubItem('${it.id}')" style="font-size:11px;padding:5px 10px;white-space:nowrap;${d?'background:rgba(232,128,76,0.15);color:#E8804C;border:1px solid rgba(232,128,76,0.4)':'background:rgba(76,175,122,0.15);color:#7DCCA0;border:1px solid rgba(76,175,122,0.35)'}" title="${d?'أرجعه للمندوب ليصحّح — بنفس التكلفة، بلا زيادة':'استلمته من المندوب'}">${d?'↩️ إرجاع للتصحيح':'📥 استلمت البند'}</button>
         </div>
-        <button class="btn" onclick="toggleSubItem('${it.id}')" style="font-size:11px;padding:5px 10px;white-space:nowrap;${d?'background:rgba(76,175,122,0.15);color:#7DCCA0;border:1px solid rgba(76,175,122,0.35)':'background:var(--navy3);color:var(--text2);border:1px solid var(--border)'}">${d?'✓ مكتمل':'تعليم كمكتمل'}</button>
+        <div style="display:flex;gap:6px;margin-top:8px;align-items:center;flex-wrap:wrap">
+          <select onchange="changeSubItemAgent('${it.id}',this.value)" style="flex:1;min-width:120px;padding:6px 8px;background:var(--navy3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Cairo',sans-serif;font-size:11px" title="غيّر المندوب — ينتقل البند لملفه">
+            <option value="">— بلا مندوب —</option>
+            ${agents.map(a=>`<option value="${a.id}" ${it.agentId===a.id?'selected':''}>🚚 ${esc(a.name)}</option>`).join('')}
+          </select>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input type="number" value="${(+it.agentCost||0)}" onchange="changeSubItemCost('${it.id}',this.value)" style="width:95px;padding:6px;background:var(--navy3);border:1px solid var(--border);border-radius:6px;color:#E0A44C;font-size:12px;font-weight:700;text-align:center" title="التكلفة الفعلية — عدّلها عند الاستلام إن اختلفت">
+            <span style="font-size:10px;color:var(--text3)">ل.ل</span>
+          </div>
+        </div>
       </div>`;}).join('')||'<div style="text-align:center;color:var(--text3);padding:14px">لا بنود</div>'}
   `;
 }
 function _agentToggleSub(txnId,itemId){ _subItemsTxnId=txnId; toggleSubItem(itemId); } // من ملف المندوب
+// نقل بند لمندوب آخر — ينتقل فوراً لملف المندوب الجديد ويخرج من ملف القديم
+function changeSubItemAgent(itemId,agentId){
+  const t=transactions.find(x=>x.id===_subItemsTxnId); if(!t||!Array.isArray(t.subItems))return;
+  const it=t.subItems.find(x=>x.id===itemId); if(!it)return;
+  const oldAg=agents.find(a=>a.id===it.agentId), newAg=agents.find(a=>a.id===agentId);
+  it.agentId=agentId||'';
+  saveTxns();
+  notify(newAg?('🚚 نُقل البند إلى '+newAg.name+(oldAg?' (بدل '+oldAg.name+')':'')):'أُزيل المندوب عن البند');
+  renderSubItemsModal(); _reRenderTxnViews();
+}
+// تعديل التكلفة الفعلية لبند (عند الاستلام أو التصحيح) — يعاد احتساب الربح
+function changeSubItemCost(itemId,val){
+  const t=transactions.find(x=>x.id===_subItemsTxnId); if(!t||!Array.isArray(t.subItems))return;
+  const it=t.subItems.find(x=>x.id===itemId); if(!it)return;
+  const nc=parseFloat(val); it.agentCost=(isNaN(nc)||nc<0)?0:nc;
+  t.profit=(+t.paid||0)-txnBuy(t);
+  saveTxns();
+  notify('💾 حُدّثت تكلفة البند — الإجمالي: '+txnBuy(t).toLocaleString()+' ل.ل');
+  renderSubItemsModal(); _reRenderTxnViews();
+}
 function toggleSubItem(itemId){
   const t=transactions.find(x=>x.id===_subItemsTxnId); if(!t||!Array.isArray(t.subItems))return;
   const it=t.subItems.find(x=>x.id===itemId); if(!it)return;
