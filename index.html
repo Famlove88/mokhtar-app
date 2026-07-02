@@ -1422,7 +1422,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 27 · 2026-07-02'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 29 · 2026-07-02'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;});}catch(_e){}
 const SERIAL_START=26112;
@@ -1940,8 +1940,11 @@ function _recordDeletions(key,data){
     _fbKnownIds[key]=now;
   }catch(_e){}
 }
+function _fbKeyName(key){ const m={}; m[SK]='المواطنون';m[FK]='النماذج';m[TFK]='النماذج النصية';m[TK]='المعاملات';m[DK]='الديون';m[STK]='الطوابع';m[CK]='الصندوق';m[AGK]='المناديب';m[CTK]='المعاملات المركبة';m[AFK]='الإفادات';m[WAK]='قوالب الرسائل';m[FLK]='حقول المواطن'; return m[key]||key; }
 function _fbSet(key,data){
   if(!window._fbReady||!window._fbDb)return;
+  // ⛔ حارس حدّ Firestore (1MB): لو تجاوز القسم الحدّ، نبّه بوضوح بدل الفشل الصامت
+  try{ var _sz=JSON.stringify(data).length; if(_sz>950000){ notify('⚠️ قسم "'+_fbKeyName(key)+'" أكبر من حدّ المزامنة ('+Math.round(_sz/1024)+'KB) — غالباً صورة محفوظة داخل البيانات. أعد رفع الصورة من زر التعديل ليُحفظ رابطها فقط.','red'); console.warn('fbSet size guard',key,_sz); return; } }catch(_e){}
   _recordDeletions(key,data); // ✅ سجّل أي عنصر اختفى عن آخر حفظ كشاهد حذف
   _fbPending[key]=data;
   if(_fbTimers[key])clearTimeout(_fbTimers[key]);
@@ -2142,7 +2145,7 @@ function _fbScheduleRerender(){
 function _fbStartLiveSync(){
   _fbStopLiveSync();
   if(!window._fbReady||!window._fbDb)return;
-  var keys=[SK,EK,FK,TFK,TK,DK,STK,CK,SVCK,SGK,WAK,AGK,PKK,UKK,FLK,CTK];
+  var keys=[SK,EK,FK,TFK,TK,DK,STK,CK,SVCK,SGK,WAK,AGK,PKK,UKK,FLK,CTK,AFK];
   keys.forEach(function(key){
     var unsub=window._fbDb.collection('mxt').doc(key).onSnapshot(function(doc){
       if(!doc||!doc.exists)return;
@@ -2175,7 +2178,7 @@ function _fbSyncDown(){
     return;
   }
   _fbStatus('sync');
-  var keys=[SK,EK,FK,TFK,TK,DK,STK,CK,SVCK,SGK,WAK,AGK,PKK,UKK,FLK];
+  var keys=[SK,EK,FK,TFK,TK,DK,STK,CK,SVCK,SGK,WAK,AGK,PKK,UKK,FLK,CTK,AFK];
 
   function applyDocs(docs){
     docs.forEach(function(doc){ if(doc&&doc.exists){var dd=doc.data(); if(dd&&dd.dels)_mergeDels(dd.dels);} }); // ✅ مرحلة 1: اجمع كل شواهد الحذف
@@ -6279,7 +6282,7 @@ function renderEditCanvas(){
   const fm=forms.find(f=>f.id===editingFormId);
   const canvas=document.getElementById('editCanvas');
   if(editFbImg){
-    canvas.innerHTML=`<img src="${editFbImg}" style="width:100%;display:block;border-radius:8px" id="editFbImg">`;
+    canvas.innerHTML=`<img src="${resolveImg(editFbImg)||editFbImg}" style="width:100%;display:block;border-radius:8px" id="editFbImg">`;
   }else{
     canvas.innerHTML=`<div style="padding:20px;color:var(--text3);font-size:12px;text-align:center">لا صورة — الحقول ستظهر كقائمة<br><small>ارفع صورة لتحديد مواقع الحقول بدقة</small></div>`;
   }
@@ -6335,7 +6338,20 @@ function updateEditBoxes(){
 function editFormUpload(e){
   const file=e.target.files[0];if(!file)return;
   const reader=new FileReader();
-  reader.onload=ev=>{editFbImg=ev.target.result;renderEditCanvas();notify('✅ تم رفع الصورة');};
+  reader.onload=ev=>{
+    compressImage(ev.target.result, async (compressedImg)=>{
+      try{
+        // ✅ نفس مسار المنشئ الرئيسي: رفع لـ GitHub → مرجع قصير (رابط) بدل base64 داخل البيانات
+        const imgRef=await saveImgToIdb(compressedImg,'form',editingFormId||null);
+        editFbImg=imgRef;
+        renderEditCanvas();
+        notify('✅ رُفعت الصورة وستظهر على كل الأجهزة');
+      }catch(err){
+        console.error('editFormUpload failed:',err);
+        // لا نسقط أبداً إلى base64 داخل البيانات — يفسد مزامنة النماذج كلها (حدّ 1MB)
+      }
+    });
+  };
   reader.readAsDataURL(file);
 }
 function updateEditFontSize(v){currentFontSize=parseInt(v);document.getElementById('editFontSizeVal').textContent=v;}
