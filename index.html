@@ -1422,9 +1422,12 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 29 · 2026-07-02'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 30 · 2026-07-07'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
-try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;});}catch(_e){}
+try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;
+  // 🔑 استعادة جلسة بوابة المندوب بعد التحديث
+  try{var _sag=sessionStorage.getItem('lb_agent_portal'); if(_sag){ setTimeout(function(){ try{ loadAll(); if(agents.find(function(a){return a.id===_sag;})) _enterAgentPortal(_sag); else sessionStorage.removeItem('lb_agent_portal'); }catch(_e){} },50); }}catch(_e){}
+});}catch(_e){}
 const SERIAL_START=26112;
 // permissions & users
 let userPerms={};   // {username: {page:bool,...}}
@@ -1819,6 +1822,7 @@ function savePerms(){
   if(window._fbReady){_fbSet(PKK,userPerms);_fbSet(UKK,extraUsers);}
 }
 function canAccess(page){
+  if(_agentPortalId) return page==='agentportal'; // 🔒 وضع بوابة المندوب: صفحة واحدة فقط
   if(!currentUser||currentUser==='admin'||currentUser==='مختار')return true;
   const p=userPerms[currentUser];
   // صفحات حسّاسة (مالية): مرفوضة افتراضياً — تظهر فقط للأدمن أو من مُنِح صلاحية صريحة (موثوق)
@@ -2423,6 +2427,9 @@ function doLogin(){
   Object.entries(extraUsers).forEach(([k,v])=>{allUsers[k]=v.pass;});
   const allNames={...UNAMES};
   Object.entries(extraUsers).forEach(([k,v])=>{allNames[k]=v.name||k;});
+  // 🔑 بوابة المندوب: لو طابق حساب مندوب، افتح وضع البوابة المقفول (معاملاته فقط)
+  const _pag=agents.find(a=>a.portalUser&&a.portalPass&&a.portalUser===u&&a.portalPass===p);
+  if(_pag){ _enterAgentPortal(_pag.id); return; }
   if(allUsers[u]&&allUsers[u]===p){
     currentUser=u;
     document.getElementById('loginErr').style.display='none';
@@ -2455,6 +2462,58 @@ function doLogin(){
     document.getElementById('loginErr').style.display='block';
     document.getElementById('loginPass').value='';
   }
+}
+// ═══════════════ بوابة المندوب: صفحة وحيدة مقفولة تعرض معاملاته الحالية فقط ═══════════════
+let _agentPortalId=null;
+function _enterAgentPortal(agId){
+  _agentPortalId=agId; currentUser='__agent__';
+  try{sessionStorage.setItem('lb_agent_portal',agId);}catch(_e){}
+  document.getElementById('loginErr').style.display='none';
+  document.getElementById('loginScreen').style.display='none';
+  const app=document.getElementById('appScreen'); app.style.display='flex';
+  // 🔒 قفل الواجهة: لا قائمة جانبية ولا تنقّل
+  const sb=document.querySelector('.sidebar'); if(sb)sb.style.display='none';
+  loadAll();
+  const ag=agents.find(a=>a.id===agId);
+  document.getElementById('userName').textContent=(ag?ag.name:'مندوب');
+  document.getElementById('userAvatar').textContent=(ag&&ag.name?ag.name[0]:'م');
+  currentPage='agentportal';
+  renderAgentPortal();
+  if(window._fbReady){_fbStatus('sync');_fbSyncDown();}else{_fbStatus('off');}
+}
+function renderAgentPortal(){
+  const mp=document.getElementById('mainPanel'); if(!mp)return;
+  const ag=agents.find(a=>a.id===_agentPortalId);
+  if(!ag){ mp.innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">الحساب غير موجود — تواصل مع المكتب.</div>'; return; }
+  const ats=_agentTxns(ag.id);
+  mp.innerHTML=`
+    <div class="page-head" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+      <div><h2 class="page-title">🚚 أعمالي — ${esc(ag.name)}</h2><div class="page-sub">${ats.length?ats.length+' معاملة قيد الإنجاز لديك':'لا معاملات لديك حالياً'}</div></div>
+      <button class="btn btn-outline" onclick="agentPortalLogout()" style="font-size:12px">🚪 خروج</button>
+    </div>
+    <div style="padding:0 24px 24px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:14px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:9px 12px">هذه المعاملات المحوّلة إليك من مكتب المختار. عند تسليمها للمكتب واستلامها منك، <b>تختفي من هنا تلقائياً</b>. القائمة تتحدّث لحظياً.</div>
+      ${ats.length?ats.map(t=>{
+        const myItems=Array.isArray(t.subItems)?t.subItems.filter(i=>i.agentId===ag.id&&i.status!=='مسترجع'):[];
+        const days=txnAgeDays(t); const lvl=txnAgeLevel(t);
+        return `<div style="background:var(--navy2);border:1px solid ${lvl===2?'rgba(201,76,76,0.35)':lvl===1?'rgba(224,164,76,0.35)':'var(--border)'};border-radius:12px;padding:14px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+            <div style="font-size:14px;font-weight:800;color:var(--gold)">${txnKind(t)==='private'?'🚗 ':'#'}${formatSerial(t.serial)}</div>
+            <span style="font-size:10.5px;font-weight:700;color:${lvl===2?'#E88080':lvl===1?'#E0A44C':'var(--text3)'};background:var(--navy3);padding:3px 10px;border-radius:14px">منذ ${days} يوم</span>
+          </div>
+          <div style="font-size:13.5px;font-weight:700;color:var(--text);margin-top:6px">${esc(t.type||'—')}</div>
+          <div style="font-size:11.5px;color:var(--text3);margin-top:4px">👤 ${esc(t.citName||'—')} · 📅 حُوّلت: ${t.date||'—'}</div>
+          ${t.note?`<div style="font-size:11px;color:var(--text2);margin-top:6px;background:var(--navy3);border-radius:7px;padding:7px 10px">📝 ${esc(t.note)}</div>`:''}
+          ${myItems.length?`<div style="margin-top:9px;padding-top:9px;border-top:1px dashed var(--border)">
+            <div style="font-size:10.5px;color:#E0A44C;font-weight:700;margin-bottom:5px">البنود المطلوبة منك:</div>
+            ${myItems.map(it=>`<div style="font-size:12px;color:var(--text);padding:4px 0">• ${esc(it.desc||'بند')}</div>`).join('')}
+          </div>`:''}
+        </div>`;}).join(''):`<div style="text-align:center;padding:50px 20px;color:var(--text3)"><div style="font-size:44px;margin-bottom:10px">✅</div><div style="font-size:14px;font-weight:700;color:var(--text2)">لا معاملات لديك حالياً</div><div style="font-size:11.5px;margin-top:5px">عندما يحوّل لك المكتب معاملة ستظهر هنا فوراً.</div></div>`}
+    </div>`;
+}
+function agentPortalLogout(){
+  try{sessionStorage.removeItem('lb_agent_portal');}catch(_e){}
+  _agentPortalId=null; location.reload();
 }
 function doLogout(){
   if(!confirm('هل تريد تسجيل الخروج؟'))return;
@@ -2493,6 +2552,7 @@ function showPage(page,navEl){
   else if(page==='agents')renderAgentsPage();
   else if(page==='compound')renderCompoundPage();
   else if(page==='affidavits')renderAffidavitsPage();
+  else if(page==='agentportal')renderAgentPortal();
   else if(page==='agent_detail')renderAgentDetail();
   else if(page==='permissions')renderPermissionsPage();
   else if(page==='cashbox')renderCashboxPage();
@@ -3476,6 +3536,8 @@ function openAgentModal(editId){
   document.getElementById('agentModalTitle').textContent=ag?'✏️ تعديل المندوب':'🧑‍💼 مندوب جديد';
   document.getElementById('agName').value=ag?ag.name:'';
   document.getElementById('agPhone').value=ag?ag.phone||'':'';
+  const _pu=document.getElementById('agPortalUser');if(_pu)_pu.value=ag?(ag.portalUser||''):'';
+  const _pp=document.getElementById('agPortalPass');if(_pp)_pp.value=ag?(ag.portalPass||''):'';
   document.getElementById('agNotes').value=ag?ag.notes||'':'';
   document.getElementById('agentModal')._editId=editId||null;
   document.getElementById('agentModal').style.display='block';
@@ -3486,9 +3548,9 @@ function saveAgentModal(){
   const editId=document.getElementById('agentModal')._editId;
   if(editId){
     const ag=agents.find(a=>a.id===editId);
-    if(ag){ag.name=name;ag.phone=document.getElementById('agPhone').value.trim();ag.notes=document.getElementById('agNotes').value.trim();}
+    if(ag){ag.name=name;ag.phone=document.getElementById('agPhone').value.trim();ag.notes=document.getElementById('agNotes').value.trim();ag.portalUser=((document.getElementById('agPortalUser')||{}).value||'').trim();ag.portalPass=((document.getElementById('agPortalPass')||{}).value||'').trim();}
   } else {
-    agents.push({id:'ag_'+Date.now(),name,phone:document.getElementById('agPhone').value.trim(),notes:document.getElementById('agNotes').value.trim(),items:[],payments:[]});
+    agents.push({id:'ag_'+Date.now(),name,phone:document.getElementById('agPhone').value.trim(),notes:document.getElementById('agNotes').value.trim(),portalUser:((document.getElementById('agPortalUser')||{}).value||'').trim(),portalPass:((document.getElementById('agPortalPass')||{}).value||'').trim(),items:[],payments:[]});
   }
   saveAgents();closeModal('agentModal');
   if(currentPage==='agents')renderAgentsPage();
@@ -7904,6 +7966,14 @@ function pickForm(i){
         <div class="form-field"><label>اسم المندوب *</label><input type="text" id="agName" placeholder="الاسم الكامل"></div>
         <div class="form-field"><label>رقم الهاتف</label><input type="tel" id="agPhone" placeholder="05XXXXXXXX" style="direction:ltr;text-align:right"></div>
         <div class="form-field"><label>ملاحظات</label><input type="text" id="agNotes" placeholder="مثال: مندوب دائرة النفوس"></div>
+      </div>
+      <div style="margin-top:12px;padding:11px;background:rgba(76,139,201,0.07);border:1px solid rgba(76,139,201,0.25);border-radius:9px">
+        <div style="font-size:11.5px;font-weight:700;color:#88BBE8;margin-bottom:3px">🔑 بوابة المندوب (اختياري)</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.6">أعطه اسم دخول وكلمة سر — يفتح البرنامج من نفس الرابط ويرى <b>معاملاته الحالية فقط</b>، وتختفي عنده تلقائياً عندما تستلمها منه.</div>
+        <div class="form-grid">
+          <div class="form-field"><label>اسم الدخول</label><input type="text" id="agPortalUser" placeholder="مثال: abo.ali" autocomplete="off" style="direction:ltr;text-align:right"></div>
+          <div class="form-field"><label>كلمة السر</label><input type="text" id="agPortalPass" placeholder="اتركه فارغاً لتعطيل الدخول" autocomplete="off" style="direction:ltr;text-align:right"></div>
+        </div>
       </div>
       <div class="modal-actions" style="margin-top:16px">
         <button class="btn btn-gold" onclick="saveAgentModal()" style="flex:1;justify-content:center">✓ حفظ</button>
