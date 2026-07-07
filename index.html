@@ -1439,7 +1439,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 32 · 2026-07-07'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 33 · 2026-07-07'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;
   // 🔑 استعادة جلسة بوابة المندوب بعد التحديث
@@ -2530,11 +2530,11 @@ function renderAgentPortal(){
   if(!ag){ mp.innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">الحساب غير موجود — تواصل مع المكتب.</div>'; return; }
   const ats=_agentTxns(ag.id);
   mp.innerHTML=`
-    <div class="page-head" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-      <div><h2 class="page-title">🚚 أعمالي — ${esc(ag.name)}</h2><div class="page-sub">${ats.length?ats.length+' معاملة قيد الإنجاز لديك':'لا معاملات لديك حالياً'}</div></div>
+    <div class="page-header" style="flex-wrap:wrap;gap:10px">
+      <div><div class="page-title">🚚 أعمالي — ${esc(ag.name)}</div><div class="page-sub">${ats.length?ats.length+' معاملة قيد الإنجاز لديك':'لا معاملات لديك حالياً'}</div></div>
       <button class="btn btn-outline" onclick="agentPortalLogout()" style="font-size:12px">🚪 خروج</button>
     </div>
-    <div style="padding:0 24px 24px">
+    <div class="panel-content">
       <div style="font-size:11px;color:var(--text3);margin-bottom:14px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:9px 12px">هذه المعاملات المحوّلة إليك من مكتب المختار. عند تسليمها للمكتب واستلامها منك، <b>تختفي من هنا تلقائياً</b>. القائمة تتحدّث لحظياً.</div>
       ${ats.length?ats.map(t=>{
         const myItems=Array.isArray(t.subItems)?t.subItems.filter(i=>i.agentId===ag.id&&i.status!=='مسترجع'):[];
@@ -2916,11 +2916,11 @@ function renderAffidavitsPage(){
   const tmpls=affidavits.filter(a=>a.type==='tmpl');
   const recs=affidavits.filter(a=>a.type==='rec').sort((a,b)=>(b.at||0)-(a.at||0));
   mp.innerHTML=`
-    <div class="page-head" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
-      <div><h2 class="page-title">📜 الإفادات</h2><div class="page-sub">${tmpls.length} قالب · ${recs.length} إفادة منشأة</div></div>
+    <div class="page-header" style="flex-wrap:wrap;gap:10px">
+      <div><div class="page-title">📜 الإفادات</div><div class="page-sub">${tmpls.length} قالب · ${recs.length} إفادة منشأة</div></div>
       <button class="btn btn-gold" onclick="openAffidavitTemplate()">+ قالب جديد</button>
     </div>
-    <div style="padding:0 24px 24px">
+    <div class="panel-content">
       <div style="font-size:13px;font-weight:700;color:var(--gold3);margin:14px 0 10px">📋 قوالب الإفادات</div>
       ${tmpls.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
         ${tmpls.map(tm=>{const flds=_affFields(tm.body);return `
