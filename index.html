@@ -1439,7 +1439,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 40 · 2026-07-08'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 41 · 2026-07-08'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;
   // 🔑 استعادة جلسة بوابة المندوب بعد التحديث
@@ -1861,7 +1861,7 @@ function formatSerial(n){
   return 'F'+yr+'-'+String(seq).padStart(3,'0');
 }
 // ═══ الأرقام العربية (٠-٩) في المطبوعات الرسمية فقط — الشاشة والإدخال تبقى 0-9 ═══
-function _toArNum(s){ s=String(s==null?'':s); s=s.replace(/(?<![\u2066A-Za-z0-9\u0660-\u0669])([A-Za-z]{1,3}[0-9\u0660-\u0669]{0,4}(?:-[0-9\u0660-\u0669]{1,4})+)(?![A-Za-z0-9\u0660-\u0669])/g,'\u2066$1\u2069'); s=s.replace(/(?<![\u20660-9\u0660-\u0669])([0-9\u0660-\u0669]{1,2})([\u200E\u200F\u061C]*)([\/\-.\u2010-\u2015\u060D])[\u200E\u200F\u061C]*([0-9\u0660-\u0669]{1,2})[\u200E\u200F\u061C]*([\/\-.\u2010-\u2015\u060D])[\u200E\u200F\u061C]*([0-9\u0660-\u0669]{4})(?![0-9\u0660-\u0669])/g,function(m,g1,bm1,s1,g2,s2,yr){var hadMarks=/[\u200E\u200F\u061C]/.test(m);var sep=(s1==='\u060D')?'/':(s1>='\u2010'&&s1<='\u2015')?'-':s1;var w=function(t){return t.replace(/[\u0660-\u0669]/g,function(a){return '٠١٢٣٤٥٦٧٨٩'.indexOf(a);});};var n1=parseInt(w(g1),10)||0,n2=parseInt(w(g2),10)||0,mo,dy;if(hadMarks){mo=g2;dy=g1;}else{mo=g1;dy=g2;if(n1>12&&n2<=12){mo=g2;dy=g1;}}return '\u2066'+yr+sep+mo+sep+dy+'\u2069';}); s=s.replace(/(?<![\u2066\u200F0-9\u0660-\u0669])([0-9\u0660-\u0669]{4})([\/\-.\u2010-\u2015\u060D])[\u200E\u200F\u061C]*([0-9\u0660-\u0669]{1,2})[\u200E\u200F\u061C]*\2[\u200E\u200F\u061C]*([0-9\u0660-\u0669]{1,2})(?![0-9\u0660-\u0669])/g,'\u2066$1$2$3$2$4\u2069'); return s.replace(/[0-9]/g,function(d){return '٠١٢٣٤٥٦٧٨٩'.charAt(+d);}); }
+function _toArNum(s){ s=String(s==null?'':s); s=s.replace(/(?<![\u2066A-Za-z0-9\u0660-\u0669])([A-Za-z]{1,3}[0-9\u0660-\u0669]{0,4}(?:-[0-9\u0660-\u0669]{1,4})+)(?![A-Za-z0-9\u0660-\u0669])/g,'\u2066$1\u2069'); var _dts=[]; var _dre=new RegExp('\\u2066?(?<![A-Za-z0-9\\u0660-\\u0669])(?:([0-9\\u0660-\\u0669]{1,2})[\\u200E\\u200F\\u061C]*[\\/\\-.\\u2010-\\u2015\\u2212\\uFE63\\uFF0D\\u0640\\u060D][\\u200E\\u200F\\u061C]*([0-9\\u0660-\\u0669]{1,2})[\\u200E\\u200F\\u061C]*[\\/\\-.\\u2010-\\u2015\\u2212\\uFE63\\uFF0D\\u0640\\u060D][\\u200E\\u200F\\u061C]*([0-9\\u0660-\\u0669]{4})|([0-9\\u0660-\\u0669]{4})[\\u200E\\u200F\\u061C]*[\\/\\-.\\u2010-\\u2015\\u2212\\uFE63\\uFF0D\\u0640\\u060D][\\u200E\\u200F\\u061C]*([0-9\\u0660-\\u0669]{1,2})[\\u200E\\u200F\\u061C]*[\\/\\-.\\u2010-\\u2015\\u2212\\uFE63\\uFF0D\\u0640\\u060D][\\u200E\\u200F\\u061C]*([0-9\\u0660-\\u0669]{1,2}))(?![0-9\\u0660-\\u0669])\\u2069?','g'); s=s.replace(_dre,function(m){var west=m.replace(/[\u0660-\u0669]/g,function(a){return '٠١٢٣٤٥٦٧٨٩'.indexOf(a);}).replace(/[\u200E\u200F\u061C\u2066\u2069]/g,'').replace(/[\u2010-\u2015\u2212\uFE63\uFF0D\u0640]/g,'-').replace(/\u060D/g,'/');_dts.push('\u2066'+west+'\u2069');return '\u0001'+(_dts.length-1)+'\u0001';}); s=s.replace(/[0-9]/g,function(d){return '٠١٢٣٤٥٦٧٨٩'.charAt(+d);}); return s.replace(/\u0001([0-9\u0660-\u0669]+)\u0001/g,function(_,i){var n=i.replace(/[\u0660-\u0669]/g,function(a){return '٠١٢٣٤٥٦٧٨٩'.indexOf(a);});return _dts[parseInt(n,10)]||'';}); }
 // المحوّل الحتمي: يحوّل الأرقام في النص الظاهر فقط داخل HTML الطباعة قبل كتابته —
 // يحمي الوسوم والخصائص (src/style/data-*) وكتل <script> و<style> والكيانات الرقمية،
 // فلا ينكسر رابط صورة ولا تنسيق ولا كود، ويعمل دائماً بمعزل عن توقيت الطباعة.
@@ -1873,22 +1873,23 @@ function _arifyHtml(html){
       if(seg.charAt(0)==='<' || seg.slice(0,2)==='&#') return seg; // وسم/سكربت/ستايل/كيان — لا يُمس
       // الأرقام المتسلسلة (F26-071 / S-002): عزل اتجاهي خفي كي لا تتبعثر مقاطعها حول الشرطة
       seg=seg.replace(/(?<![\u2066A-Za-z0-9\u0660-\u0669])([A-Za-z]{1,3}[0-9\u0660-\u0669]{0,4}(?:-[0-9\u0660-\u0669]{1,4})+)(?![A-Za-z0-9\u0660-\u0669])/g,'\u2066$1\u2069');
-      // التواريخ — مُطابِق متسامح: يقبل كل أنواع الشرطات (- ‐ – — ؍ / .) والعلامات الخفية
-      // (RLM/LRM/ALM) التي تتسلّل من الكيبورد أو النسخ، ويوحّد الطباعة: سنة/شهر/يوم داخل عزل.
-      // الدلالة: المخزَّن يدوياً = شهر/يوم (طريقة فاروق) مع كشف اليوم إن كان >12؛
-      // والمخزَّن بعلامات النظام (RLM) = يوم/شهر (صيغة todayStr) فيُفكّ صحيحاً.
-      seg=seg.replace(/(?<![\u2066\u20660-9\u0660-\u0669])([0-9\u0660-\u0669]{1,2})([\u200E\u200F\u061C]*)([\/\-.\u2010-\u2015\u060D])[\u200E\u200F\u061C]*([0-9\u0660-\u0669]{1,2})[\u200E\u200F\u061C]*([\/\-.\u2010-\u2015\u060D])[\u200E\u200F\u061C]*([0-9\u0660-\u0669]{4})(?![0-9\u0660-\u0669])/g,function(m,g1,bm1,s1,g2,s2,yr){
-        var hadMarks=/[\u200E\u200F\u061C]/.test(m);
-        var sep=(s1==='\u060D')?'/':(s1>='\u2010'&&s1<='\u2015')?'-':s1;
-        var w=function(t){return t.replace(/[\u0660-\u0669]/g,function(a){return '٠١٢٣٤٥٦٧٨٩'.indexOf(a);});};
-        var n1=parseInt(w(g1),10)||0, n2=parseInt(w(g2),10)||0, mo, dy;
-        if(hadMarks){ mo=g2; dy=g1; }                 // تاريخ نظام: يوم/شهر
-        else { mo=g1; dy=g2; if(n1>12&&n2<=12){mo=g2;dy=g1;} } // طريقة فاروق: شهر/يوم (+كشف اليوم)
-        return '\u2066'+yr+sep+mo+sep+dy+'\u2069';
+      // ★ قرار فاروق النهائي: التواريخ تبقى بالأرقام الإنكليزية كما كُتبت حرفياً (ترتيبها لا يُمس
+      //   ولا يُعاد تفسيره) — لأنها الوحيدة القابلة للانقلاب بالعربي. نلتقطها بأي فاصل (- – ـ ؍ / .)
+      //   وأي كيبورد، ننظّفها من العلامات الخفية، ونحميها من التعريب داخل عزل ثابت.
+      var _dts=[];
+      var _sepC='[\\/\\-.\\u2010-\\u2015\\u2212\\uFE63\\uFF0D\\u0640\\u060D]';
+      var _bm='[\\u200E\\u200F\\u061C]*';
+      var _dre=new RegExp('\\u2066?(?<![A-Za-z0-9\\u0660-\\u0669])(?:([0-9\\u0660-\\u0669]{1,2})'+_bm+_sepC+_bm+'([0-9\\u0660-\\u0669]{1,2})'+_bm+_sepC+_bm+'([0-9\\u0660-\\u0669]{4})|([0-9\\u0660-\\u0669]{4})'+_bm+_sepC+_bm+'([0-9\\u0660-\\u0669]{1,2})'+_bm+_sepC+_bm+'([0-9\\u0660-\\u0669]{1,2}))(?![0-9\\u0660-\\u0669])\\u2069?','g');
+      seg=seg.replace(_dre,function(m){
+        var west=m.replace(/[\u0660-\u0669]/g,function(a){return '٠١٢٣٤٥٦٧٨٩'.indexOf(a);})
+                 .replace(/[\u200E\u200F\u061C\u2066\u2069]/g,'')
+                 .replace(/[\u2010-\u2015\u2212\uFE63\uFF0D\u0640]/g,'-')
+                 .replace(/\u060D/g,'/');
+        _dts.push('\u2066'+west+'\u2069');
+        return '\u0001'+(_dts.length-1)+'\u0001';
       });
-      // تواريخ سنة-أولاً الجاهزة (2004-01-07): تثبيت اتجاهها كما هي
-      seg=seg.replace(/(?<![\u2066\u200F0-9\u0660-\u0669])([0-9\u0660-\u0669]{4})([\/\-.\u2010-\u2015\u060D])[\u200E\u200F\u061C]*([0-9\u0660-\u0669]{1,2})[\u200E\u200F\u061C]*\2[\u200E\u200F\u061C]*([0-9\u0660-\u0669]{1,2})(?![0-9\u0660-\u0669])/g,'\u2066$1$2$3$2$4\u2069');
-      return seg.replace(/[0-9]/g,function(d){return '٠١٢٣٤٥٦٧٨٩'.charAt(+d);});
+      seg=seg.replace(/[0-9]/g,function(d){return '٠١٢٣٤٥٦٧٨٩'.charAt(+d);});
+      return seg.replace(/\u0001([0-9\u0660-\u0669]+)\u0001/g,function(_,i){var n=i.replace(/[\u0660-\u0669]/g,function(a){return '٠١٢٣٤٥٦٧٨٩'.indexOf(a);});return _dts[parseInt(n,10)]||'';});
     }).join('');
 }
 function _printWrite(w,html){ w.document.write(_arifyHtml(html)); }
