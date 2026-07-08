@@ -1439,7 +1439,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 33 · 2026-07-07'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 35 · 2026-07-08'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;
   // 🔑 استعادة جلسة بوابة المندوب بعد التحديث
@@ -1860,6 +1860,21 @@ function formatSerial(n){
   var yr=Math.floor(num/1000), seq=num%1000;
   return 'F'+yr+'-'+String(seq).padStart(3,'0');
 }
+// ═══ الأرقام العربية (٠-٩) في المطبوعات الرسمية فقط — الشاشة والإدخال تبقى 0-9 ═══
+function _toArNum(s){ return String(s==null?'':s).replace(/[0-9]/g,function(d){return '٠١٢٣٤٥٦٧٨٩'.charAt(+d);}); }
+// المحوّل الحتمي: يحوّل الأرقام في النص الظاهر فقط داخل HTML الطباعة قبل كتابته —
+// يحمي الوسوم والخصائص (src/style/data-*) وكتل <script> و<style> والكيانات الرقمية،
+// فلا ينكسر رابط صورة ولا تنسيق ولا كود، ويعمل دائماً بمعزل عن توقيت الطباعة.
+function _arifyHtml(html){
+  return String(html==null?'':html)
+    .split(/(<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]*>|&#[0-9]+;)/gi)
+    .map(function(seg){
+      if(!seg) return seg;
+      if(seg.charAt(0)==='<' || seg.slice(0,2)==='&#') return seg; // وسم/سكربت/ستايل/كيان — لا يُمس
+      return seg.replace(/[0-9]/g,function(d){return '٠١٢٣٤٥٦٧٨٩'.charAt(+d);});
+    }).join('');
+}
+function _printWrite(w,html){ w.document.write(_arifyHtml(html)); }
 // رقم تسلسلي موحّد سنوي تصاعدي عبر المعاملات العادية والمركّبة (يبدأ F{السنة}-001)
 function _serYY(){ return new Date().getFullYear()%100; }
 function _nextSerialUnified(){
@@ -3070,7 +3085,7 @@ function _affBuildPreview(){
 function printAffidavitText(){
   const txt=(document.getElementById('affPreviewText')?document.getElementById('affPreviewText').value:'')||'';
   const w=window.open('','_blank'); if(!w){notify('اسمح بالنوافذ المنبثقة للطباعة','warn');return;}
-  w.document.write('<html dir="rtl"><head><meta charset="utf-8"><title>إفادة</title><style>'+
+  _printWrite(w,'<html dir="rtl"><head><meta charset="utf-8"><title>إفادة</title><style>'+
     '@page{size:A4;margin:60mm 20mm 25mm 20mm;}'+
     'body{font-family:Cairo,\'Segoe UI\',Tahoma,sans-serif;font-size:15px;line-height:2.1;color:#000;text-align:justify;direction:rtl;margin:0;padding:0;}'+
     '.txt{white-space:pre-wrap;}@media print{button{display:none;}}'+
@@ -3091,7 +3106,7 @@ function _affBgPreview(){
   const text=(document.getElementById('affPreviewText')||{}).value||'';
   wrap.innerHTML=`<div style="position:relative;width:100%;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:#fff">
     <img id="affBgImg" src="${src}" style="width:100%;display:block">
-    <div id="affBgTxt" style="position:absolute;top:${s.top}%;right:${s.side}%;width:${100-2*s.side}%;text-align:justify;direction:rtl;white-space:pre-wrap;font-family:'Cairo',sans-serif;color:#111;line-height:${s.line};font-size:12px">${esc(text)}</div>
+    <div id="affBgTxt" style="position:absolute;top:${s.top}%;right:${s.side}%;width:${100-2*s.side}%;text-align:justify;direction:rtl;white-space:pre-wrap;font-family:'Cairo',sans-serif;color:#111;line-height:${s.line};font-size:12px">${esc(_toArNum(text))}</div>
   </div>`;
   const img=document.getElementById('affBgImg');
   const scale=function(){ const W=img.offsetWidth||1, D=fm.imgW||W, sc=D>0?(W/D):1; const t=document.getElementById('affBgTxt'); if(t)t.style.fontSize=((s.font)*sc)+'px'; };
@@ -3105,7 +3120,7 @@ function printAffidavitOnForm(){
   const src=resolveImg(fm.image);
   const text=(document.getElementById('affPreviewText')||{}).value||'';
   const w=window.open('','_blank'); if(!w){notify('اسمح بالنوافذ المنبثقة للطباعة','warn');return;}
-  w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>إفادة</title>'+
+  _printWrite(w,'<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>إفادة</title>'+
     '<link href="https://fonts.googleapis.com/css2?family=Cairo&display=swap" rel="stylesheet">'+
     '<style>@page{size:auto;margin:0}html,body{margin:0;padding:0}body{direction:rtl}.wrap{position:relative;display:block;width:100%}.wrap img{width:100%;display:block}'+
     '.afftxt{position:absolute;top:'+s.top+'%;right:'+s.side+'%;width:'+(100-2*s.side)+'%;text-align:justify;direction:rtl;white-space:pre-wrap;font-family:Cairo,\'Segoe UI\',Tahoma,sans-serif;color:#111;line-height:'+s.line+';}'+
@@ -3373,7 +3388,7 @@ ${ct.note?`<div style="padding:10px 14px;background:#f9f9f9;border-right:3px sol
 <div class="footer">🌲 سجل المختار الإلكتروني · النسخة 3.0 · ${new Date().getFullYear()}</div>
 </body></html>`;
   const w=window.open('','_blank');
-  w.document.write(html);w.document.close();
+  _printWrite(w,html);w.document.close();
   setTimeout(()=>w.print(),400);
 }
 
@@ -4176,7 +4191,7 @@ function printReport(){
 </div>
 </body></html>`;
   const w=window.open('','_blank');
-  w.document.write(html);
+  _printWrite(w,html);
   w.document.close();
   setTimeout(()=>w.print(),500);
 }
@@ -4308,7 +4323,7 @@ function printAgentReport(agId){
 </div>
 </body></html>`;
   const w=window.open('','_blank');
-  w.document.write(html);
+  _printWrite(w,html);
   w.document.close();
   setTimeout(()=>w.print(),500);
 }
@@ -4519,7 +4534,7 @@ ${t.note?`<div style="padding:8px 12px;background:#f9f9f9;border-right:3px solid
 </div>
 </body></html>`;
   const w=window.open('','_blank');
-  w.document.write(html);
+  _printWrite(w,html);
   w.document.close();
   if(!preview)setTimeout(()=>w.print(),500);
 }
@@ -5204,7 +5219,7 @@ function doPrintCitizen(req){
   const noteHtml=_buildRequestBox(req);
   const _nm=citName(c); const titleName=(_nm&&_nm.charAt(0)!=='#')?_nm:('سجل #'+(c.serial!=null?c.serial:'—'));
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>بيانات السجل</title><style>body{font-family:Arial;padding:30px;direction:rtl;color:#111}h1{font-size:18px;border-bottom:3px solid #C9A84C;padding-bottom:8px;margin-bottom:16px}h2{font-size:13px;color:#0B1426;margin:16px 0 6px;background:#f5f5f5;padding:5px 10px;border-right:3px solid #C9A84C}table{width:100%;border-collapse:collapse;margin-bottom:6px}td{padding:6px 10px;border:1px solid #ddd;font-size:13px}td:first-child{font-weight:bold;background:#fafafa;width:180px}.noprint{margin-bottom:14px}@media print{.noprint{display:none}}</style></head><body>
+  _printWrite(w,`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>بيانات السجل</title><style>body{font-family:Arial;padding:30px;direction:rtl;color:#111}h1{font-size:18px;border-bottom:3px solid #C9A84C;padding-bottom:8px;margin-bottom:16px}h2{font-size:13px;color:#0B1426;margin:16px 0 6px;background:#f5f5f5;padding:5px 10px;border-right:3px solid #C9A84C}table{width:100%;border-collapse:collapse;margin-bottom:6px}td{padding:6px 10px;border:1px solid #ddd;font-size:13px}td:first-child{font-weight:bold;background:#fafafa;width:180px}.noprint{margin-bottom:14px}@media print{.noprint{display:none}}</style></head><body>
   <div class="noprint"><button onclick="window.print()" style="padding:8px 18px;background:#C9A84C;color:#111;border:none;border-radius:6px;cursor:pointer;font-size:13px">🖨️ طباعة</button></div>
   ${noteHtml}
   <h1>${esc(titleName)} &nbsp;·&nbsp; ${regIcon(regOf(c))} ${regLabel(regOf(c))} &nbsp;·&nbsp; 🔢 #${c.serial!=null?c.serial:'—'}</h1>
@@ -5847,7 +5862,7 @@ function printTxnsReport(){
   const rows=transactions.slice().sort((a,b)=>b.serial-a.serial).map(t=>`<tr><td>#${formatSerial(t.serial)}</td><td>${t.citName||'—'}</td><td>${t.type||'—'}</td><td>${t.date||'—'}</td><td>${t.time||'—'}</td><td>${(t.cost||0).toLocaleString()}</td><td>${(t.paid||0).toLocaleString()}</td><td>${((t.cost||0)-(t.paid||0)).toLocaleString()}</td><td>${t.payStatus||'—'}</td></tr>`).join('');
   const total=transactions.reduce((s,t)=>s+(parseFloat(t.paid)||0),0);
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير المعاملات</title><style>body{font-family:Arial;padding:20px;direction:rtl}h1{font-size:16px;border-bottom:2px solid #C9A84C;padding-bottom:8px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#0B1426;color:#C9A84C;padding:7px 8px;text-align:right}td{padding:6px 8px;border-bottom:1px solid #eee}.noprint{margin-bottom:10px}@media print{.noprint{display:none}}</style></head><body>
+  _printWrite(w,`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير المعاملات</title><style>body{font-family:Arial;padding:20px;direction:rtl}h1{font-size:16px;border-bottom:2px solid #C9A84C;padding-bottom:8px}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#0B1426;color:#C9A84C;padding:7px 8px;text-align:right}td{padding:6px 8px;border-bottom:1px solid #eee}.noprint{margin-bottom:10px}@media print{.noprint{display:none}}</style></head><body>
   <div class="noprint"><button onclick="window.print()" style="padding:7px 16px;background:#C9A84C;color:#111;border:none;border-radius:5px;cursor:pointer">🖨️ طباعة</button></div>
   <h1>تقرير المعاملات — ${new Date().toLocaleDateString('ar-LB')}</h1>
   <table><thead><tr><th>#</th><th>المواطن</th><th>الخدمة</th><th>التاريخ</th><th>الوقت</th><th>التكلفة</th><th>المدفوع</th><th>الفرق</th><th>الحالة</th></tr></thead><tbody>${rows}</tbody></table>
@@ -6130,7 +6145,7 @@ function printTextForm(id,citId){
   const filled=esc(resolveTextFormBody(tf,c));
   const w=window.open('','_blank');
   if(!w){notify('⚠️ المتصفح حجب فتح نافذة الطباعة','warn');return;}
-  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>${esc(tf.name)}</title>
+  _printWrite(w,`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>${esc(tf.name)}</title>
   <style>
     body{margin:40px;direction:rtl;font-family:Arial,Tahoma,sans-serif;color:#111}
     .doc{white-space:pre-wrap;font-size:15px;line-height:2.2;max-width:800px;margin:0 auto}
@@ -6233,14 +6248,14 @@ function previewForm(fid,txnId,req){
       }
       return `<div class="pf-box" data-fs="${b.fs||fs}" style="position:absolute;left:${b.xPct}%;top:${b.yPct}%;width:${b.wPct}%;min-height:${b.hPct}%;padding:1px 5px;font-size:${b.fs||fs}px;font-weight:${b.fw||'700'};color:${b.tc||'#111'};background:${b.bg&&b.bg!=='transparent'&&b.bg!=='#ffffff'?b.bg:'transparent'};font-family:Arial,sans-serif;white-space:nowrap;overflow:visible;direction:rtl;display:flex;align-items:center">${getData(b.key)}</div>`;
     }).join('');
-    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title> </title><style>@page{size:auto;margin:0}html,body{margin:0;padding:0}body{direction:rtl;font-family:Arial}.wrap{position:relative;display:block;width:100%}.wrap img{width:100%;display:block}${_noBgCss}</style></head><body><div class="wrap"><img id="pfimg" src="${fmImageSrc}">${boxesHTML}</div><script>(function(){var img=document.getElementById('pfimg');function go(){var W=img.offsetWidth||img.naturalWidth||1;var D=${(fm.imgW||0)}||W;var sc=D>0?(W/D):1;var bx=document.querySelectorAll('.pf-box[data-fs]');for(var i=0;i<bx.length;i++){var f=parseFloat(bx[i].getAttribute('data-fs'))||12;bx[i].style.fontSize=(f*sc)+'px';}setTimeout(function(){try{window.print();}catch(e){}},300);}if(img.complete&&img.naturalWidth>0){go();}else{img.onload=go;img.onerror=function(){setTimeout(function(){try{window.print();}catch(e){}},300);};}})();<\/script></body></html>`);
+    _printWrite(w,`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title> </title><style>@page{size:auto;margin:0}html,body{margin:0;padding:0}body{direction:rtl;font-family:Arial}.wrap{position:relative;display:block;width:100%}.wrap img{width:100%;display:block}${_noBgCss}</style></head><body><div class="wrap"><img id="pfimg" src="${fmImageSrc}">${boxesHTML}</div><script>(function(){var img=document.getElementById('pfimg');function go(){var W=img.offsetWidth||img.naturalWidth||1;var D=${(fm.imgW||0)}||W;var sc=D>0?(W/D):1;var bx=document.querySelectorAll('.pf-box[data-fs]');for(var i=0;i<bx.length;i++){var f=parseFloat(bx[i].getAttribute('data-fs'))||12;bx[i].style.fontSize=(f*sc)+'px';}setTimeout(function(){try{window.print();}catch(e){}},300);}if(img.complete&&img.naturalWidth>0){go();}else{img.onload=go;img.onerror=function(){setTimeout(function(){try{window.print();}catch(e){}},300);};}})();<\/script></body></html>`);
   }else{
     const rows=fm.boxes.map(b=>{
       const _v=(b.key==='__request__')?esc(reqText):getData(b.key);
       const _ws=(b.key==='__request__')?'white-space:pre-wrap;':'';
       return `<tr><td style="font-weight:bold;background:#f9f9f9;padding:7px 12px;border:1px solid #ddd;width:35%;font-size:${fs}px">${b.label}</td><td style="padding:7px 12px;border:1px solid #ddd;font-size:${fs}px;${_ws}">${_v}</td></tr>`;
     }).join('');
-    w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title> </title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial;padding:28px;direction:rtl}</style></head><body><table style="width:100%;border-collapse:collapse">${rows}</table><script>setTimeout(function(){try{window.print();}catch(e){}},300);<\/script></body></html>`);
+    _printWrite(w,`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title> </title><style>@page{size:auto;margin:0}html,body{margin:0}body{font-family:Arial;padding:28px;direction:rtl}</style></head><body><table style="width:100%;border-collapse:collapse">${rows}</table><script>setTimeout(function(){try{window.print();}catch(e){}},300);<\/script></body></html>`);
   }
   w.document.close();
 }
@@ -6942,7 +6957,7 @@ function previewFormBuild(){
       }
       return '<div style="position:absolute;left:'+b.xPct+'%;top:'+b.yPct+'%;width:'+b.wPct+'%;min-height:'+b.hPct+'%;padding:1px 5px;font-size:'+(b.fs||fs)+'px;font-weight:'+(b.fw||'700')+';color:'+(b.tc||'#111')+';background:'+(b.bg&&b.bg!=='transparent'&&b.bg!=='#ffffff'?b.bg:'transparent')+';font-family:Arial,sans-serif;white-space:nowrap;overflow:visible;direction:rtl;display:flex;align-items:center">'+getPreviewData(b.key)+'</div>';
     }).join('');
-    w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>معاينة: '+name+'</title>'
+    _printWrite(w,'<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>معاينة: '+name+'</title>'
       +'<style>body{margin:20px;direction:rtl;font-family:Arial}@media print{.noprint{display:none}'+(_noBg?'.bgimg{visibility:hidden!important}':'')+'}</style></head><body>'
       +'<div class="noprint" style="margin-bottom:14px;padding:10px 16px;background:#1C2A45;border-radius:8px;display:flex;align-items:center;gap:10px">'
       +'<span style="color:#C9A84C;font-weight:700;font-size:14px">👁️ معاينة — '+name+'</span>'
@@ -6957,7 +6972,7 @@ function previewFormBuild(){
       return '<tr><td style="font-weight:bold;background:#f9f9f9;padding:7px 12px;border:1px solid #ddd;width:35%;font-size:'+fs+'px">'+b.label+'</td>'
         +'<td style="padding:7px 12px;border:1px solid #ddd;font-size:'+fs+'px">'+getPreviewData(b.key)+'</td></tr>';
     }).join('');
-    w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>معاينة: '+name+'</title>'
+    _printWrite(w,'<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>معاينة: '+name+'</title>'
       +'<style>body{font-family:Arial;padding:20px;direction:rtl}@media print{.noprint{display:none}}</style></head><body>'
       +'<div class="noprint" style="margin-bottom:14px;padding:10px 16px;background:#1C2A45;border-radius:8px;display:flex;align-items:center;gap:10px">'
       +'<span style="color:#C9A84C;font-weight:700;font-size:14px">👁️ معاينة — '+name+'</span>'
@@ -7068,7 +7083,7 @@ function printCashReport(){
   const totalOut=cashEntries.filter(c=>c.type==='صادر').reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
   const rows=[...cashEntries].reverse().map(c=>`<tr><td>${c.type}</td><td style="font-weight:bold">${(parseFloat(c.amount)||0).toLocaleString()}</td><td>${c.desc||'—'}</td><td>${c.date||'—'}</td><td>${c.time||'—'}</td></tr>`).join('');
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير الصندوق</title><style>body{font-family:Arial;padding:20px;direction:rtl}h1{font-size:16px;border-bottom:2px solid #C9A84C;padding-bottom:8px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#0B1426;color:#C9A84C;padding:7px 10px;text-align:right}td{padding:6px 10px;border-bottom:1px solid #eee}.noprint{margin-bottom:10px}@media print{.noprint{display:none}}</style></head><body>
+  _printWrite(w,`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير الصندوق</title><style>body{font-family:Arial;padding:20px;direction:rtl}h1{font-size:16px;border-bottom:2px solid #C9A84C;padding-bottom:8px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#0B1426;color:#C9A84C;padding:7px 10px;text-align:right}td{padding:6px 10px;border-bottom:1px solid #eee}.noprint{margin-bottom:10px}@media print{.noprint{display:none}}</style></head><body>
   <div class="noprint"><button onclick="window.print()" style="padding:7px 16px;background:#C9A84C;color:#111;border:none;border-radius:5px;cursor:pointer">🖨️</button></div>
   <h1>تقرير الصندوق — ${new Date().toLocaleDateString('ar-LB')}</h1>
   <p style="margin-bottom:10px">الرصيد: <strong>${(totalIn-totalOut).toLocaleString()} ل.ل</strong> | واردات: ${totalIn.toLocaleString()} | صادرات: ${totalOut.toLocaleString()}</p>
@@ -7579,7 +7594,7 @@ function printStampsReport(){
   const tRev=stamps.filter(s=>s.type==='بيع').reduce((a,s)=>a+(parseFloat(s.total)||0),0);
   const tCost=stamps.filter(s=>s.type==='شراء').reduce((a,s)=>a+(parseFloat(s.total)||0),0);
   const w=window.open('','_blank');
-  w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير الطوابع<\/title>'
+  _printWrite(w,'<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>تقرير الطوابع<\/title>'
     +'<style>body{font-family:Arial;padding:20px;direction:rtl}table{width:100%;border-collapse:collapse;font-size:12px}'
     +'th{background:#0B1426;color:#C9A84C;padding:7px;text-align:right}td{padding:5px 8px;border-bottom:1px solid #eee}'
     +'.noprint{margin-bottom:10px}@media print{.noprint{display:none}}<\/style><\/head><body>'
@@ -7687,7 +7702,7 @@ function printProfitReport(){
   const debtTotal=debts.reduce((s,d)=>s+(parseFloat(d.amount)||0),0);
   const debtPaid=debts.reduce((s,d)=>s+(parseFloat(d.paid)||0),0);
   const w=window.open('','_blank');
-  w.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>التقرير المالي</title><style>body{font-family:Arial;padding:30px;direction:rtl}h1{border-bottom:2px solid #C9A84C;padding-bottom:8px;font-size:18px}h2{font-size:14px;margin:16px 0 8px}table{width:100%;border-collapse:collapse}td{padding:8px 12px;border:1px solid #ddd;font-size:13px}td:first-child{background:#fafafa;font-weight:bold;width:60%}.noprint{margin-bottom:14px}@media print{.noprint{display:none}}</style></head><body>
+  _printWrite(w,`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>التقرير المالي</title><style>body{font-family:Arial;padding:30px;direction:rtl}h1{border-bottom:2px solid #C9A84C;padding-bottom:8px;font-size:18px}h2{font-size:14px;margin:16px 0 8px}table{width:100%;border-collapse:collapse}td{padding:8px 12px;border:1px solid #ddd;font-size:13px}td:first-child{background:#fafafa;font-weight:bold;width:60%}.noprint{margin-bottom:14px}@media print{.noprint{display:none}}</style></head><body>
   <div class="noprint"><button onclick="window.print()" style="padding:7px 16px;background:#C9A84C;color:#111;border:none;border-radius:5px;cursor:pointer">🖨️</button></div>
   <h1>🌲 التقرير المالي الشامل — ${new Date().toLocaleDateString('ar-LB')}</h1>
   <h2>الصندوق</h2><table><tr><td>إجمالي الواردات</td><td>${cashIn.toLocaleString()} ل.ل</td></tr><tr><td>إجمالي الصادرات</td><td>${cashOut.toLocaleString()} ل.ل</td></tr><tr><td><strong>صافي الصندوق</strong></td><td><strong>${(cashIn-cashOut).toLocaleString()} ل.ل</strong></td></tr></table>
