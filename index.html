@@ -1439,7 +1439,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 43 · 2026-07-08'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 45 · 2026-07-11'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;
   // 🔑 استعادة جلسة بوابة المندوب بعد التحديث
@@ -2189,6 +2189,7 @@ function _fbScheduleRerender(){
   if(_fbRenderTimer)clearTimeout(_fbRenderTimer);
   _fbRenderTimer=setTimeout(function(){
     _fbRenderTimer=null;
+    if(_agentPortalId){ _fbPendingRefresh=false; try{renderAgentPortal();}catch(_e){} return; } // ✅ البوابة: عرض فوري دائماً (لا حارس انشغال)
     _migrateSerials();
     // ✅ لا تُعِد بناء الواجهة أثناء عمل المستخدم. البيانات وصلت بالفعل ودُمجت في الذاكرة
     // وحُفظت محلياً (في _fbApplyKey)، وستظهر تلقائياً حالما يُغلق المستخدم النافذة أو
@@ -2559,7 +2560,27 @@ function _enterAgentPortal(agId){
   document.getElementById('userAvatar').textContent=(ag&&ag.name?ag.name[0]:'م');
   currentPage='agentportal';
   renderAgentPortal();
-  if(window._fbReady){_fbStatus('sync');_fbSyncDown();}else{_fbStatus('off');}
+  if(window._fbReady){
+    _fbStatus('sync');_fbSyncDown();
+    try{ if(!_fbUnsubs.length) _fbStartLiveSync(); }catch(_e){} // ✅ المستمع اللحظي يعمل بالبوابة: الاستلام يُخفي المعاملة فوراً
+  }else{_fbStatus('off');}
+  // إنعاش عند عودة الشاشة (الهاتف يوقف الاتصال بالخلفية): مزامنة + إعادة عرض
+  if(!window._portalVisBound){ window._portalVisBound=true;
+    document.addEventListener('visibilitychange',function(){
+      if(!document.hidden && _agentPortalId){ try{_fbSyncDown();}catch(_e){} setTimeout(function(){ try{renderAgentPortal();}catch(_e){} },900); }
+    });
+  }
+  // ✅ نبض دوري: حتى لو مات الاتصال الحي بصمت والشاشة مفتوحة، تصل الاستلامات خلال ≤20 ثانية
+  if(!window._portalPulse){ window._portalPulse=setInterval(function(){
+    if(!_agentPortalId||document.hidden||!window._fbReady||!window._fbDb)return;
+    [TK,AGK].forEach(function(K){
+      window._fbDb.collection('mxt').doc(K).get().then(function(doc){
+        try{ var dd=doc&&doc.exists?doc.data():null;
+          if(dd&&dd.data!==undefined){ if(dd.dels)_mergeDels(dd.dels); if(_fbApplyKey(K,dd.data)) renderAgentPortal(); }
+        }catch(_e){}
+      }).catch(function(_e){});
+    });
+  },20000); }
 }
 function renderAgentPortal(){
   const mp=document.getElementById('mainPanel'); if(!mp)return;
@@ -2572,14 +2593,28 @@ function renderAgentPortal(){
       <button class="btn btn-outline" onclick="agentPortalLogout()" style="font-size:12px">🚪 خروج</button>
     </div>
     <div class="panel-content">
+      ${(()=>{ // 💰 حسابه: المؤكَّد المستحق له − المدفوع له
+        const legacy=(ag.items||[]).filter(i=>+i.cost>0).reduce((s,i)=>s+(+i.cost||0),0);
+        const owed=legacy+agentConfirmedOwed(ag.id);
+        const paid=(ag.payments||[]).reduce((s,p)=>s+(+p.amount||0),0);
+        const bal=owed-paid, pend=agentPendingOwed(ag.id);
+        let card='';
+        if(bal>0) card=`<div style="background:linear-gradient(135deg,rgba(224,164,76,0.16),rgba(224,164,76,0.06));border:1px solid rgba(224,164,76,0.4);border-radius:12px;padding:13px 15px;margin-bottom:10px"><div style="font-size:11px;color:var(--text3);margin-bottom:3px">💰 المستحق لك بذمة المكتب</div><div style="font-size:20px;font-weight:800;color:#E0A44C">${bal.toLocaleString()} <span style="font-size:12px">ل.ل</span></div><div style="font-size:10px;color:var(--text3);margin-top:3px">يُصرف عند التحاسب مع المكتب</div></div>`;
+        else if(bal<0) card=`<div style="background:rgba(76,139,201,0.08);border:1px solid rgba(76,139,201,0.3);border-radius:12px;padding:12px 15px;margin-bottom:10px"><div style="font-size:12px;color:#88BBE8;font-weight:700">💵 لديك دفعة مقدّمة من المكتب: ${Math.abs(bal).toLocaleString()} ل.ل</div></div>`;
+        else card=`<div style="background:rgba(76,175,122,0.08);border:1px solid rgba(76,175,122,0.3);border-radius:12px;padding:11px 15px;margin-bottom:10px;font-size:12px;color:#7DCCA0;font-weight:700">✅ حسابك مع المكتب مسدَّد بالكامل</div>`;
+        if(pend>0) card+=`<div style="font-size:10.5px;color:var(--text3);margin:-4px 0 10px;padding:0 4px">⏳ وقيد التأكيد عند تسليمك المعاملات: <b style="color:#E0A44C">${pend.toLocaleString()} ل.ل</b> — تُضاف لمستحقك فور استلام المكتب منك.</div>`;
+        return card; })()}
       <div style="font-size:11px;color:var(--text3);margin-bottom:14px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;padding:9px 12px">هذه المعاملات المحوّلة إليك من مكتب المختار. عند تسليمها للمكتب واستلامها منك، <b>تختفي من هنا تلقائياً</b>. القائمة تتحدّث لحظياً.</div>
       ${ats.length?ats.map(t=>{
         const myItems=Array.isArray(t.subItems)?t.subItems.filter(i=>i.agentId===ag.id&&i.status!=='مسترجع'):[];
         const days=txnAgeDays(t); const lvl=txnAgeLevel(t);
+        const _myLeg=(Array.isArray(t.agentChain)?t.agentChain.filter(l=>l.agentId===ag.id&&l.status==='active'):[]).reduce((s,l)=>s+(+l.cost||0),0);
+        const _myItemsCost=myItems.reduce((s,i)=>s+(+i.agentCost||0),0);
+        const myCost=_myLeg+_myItemsCost; // 💵 ثمن معاملته المتفق (الساق النشطة + بنوده)
         return `<div style="background:var(--navy2);border:1px solid ${lvl===2?'rgba(201,76,76,0.35)':lvl===1?'rgba(224,164,76,0.35)':'var(--border)'};border-radius:12px;padding:14px;margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
             <div style="font-size:14px;font-weight:800;color:var(--gold)">${txnKind(t)==='private'?'🚗 ':'#'}${formatSerial(t.serial)}</div>
-            <span style="font-size:10.5px;font-weight:700;color:${lvl===2?'#E88080':lvl===1?'#E0A44C':'var(--text3)'};background:var(--navy3);padding:3px 10px;border-radius:14px">منذ ${days} يوم</span>
+            <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end"><span style="font-size:10.5px;font-weight:700;color:${lvl===2?'#E88080':lvl===1?'#E0A44C':'var(--text3)'};background:var(--navy3);padding:3px 10px;border-radius:14px">منذ ${days} يوم</span><span style="font-size:10.5px;font-weight:700;color:${myCost>0?'#7DCCA0':'var(--text3)'};background:${myCost>0?'rgba(76,175,122,0.12)':'var(--navy3)'};padding:3px 10px;border-radius:14px">💵 ${myCost>0?('أجرتك: '+myCost.toLocaleString()+' ل.ل'):'أجرتك تُحدَّد عند التسليم'}</span></span>
           </div>
           <div style="font-size:13.5px;font-weight:700;color:var(--text);margin-top:6px">${esc(t.type||'—')}</div>
           <div style="font-size:11.5px;color:var(--text3);margin-top:4px">👤 ${esc(t.citName||'—')} · 📅 حُوّلت: ${t.date||'—'}</div>
@@ -3034,8 +3069,8 @@ function saveAffidavitTemplate(){
   const body=document.getElementById('affTmplBody').value;
   if(!name){notify('❌ أدخل اسم القالب','red');return;}
   if(!body.trim()){notify('❌ أدخل نص القالب','red');return;}
-  if(_affTmplEditId){ const tm=affidavits.find(a=>a.id===_affTmplEditId&&a.type==='tmpl'); if(tm){ tm.name=name; tm.body=body; } }
-  else { affidavits.push({id:'aff_'+Date.now(),type:'tmpl',name:name,body:body,at:Date.now()}); }
+  if(_affTmplEditId){ const tm=affidavits.find(a=>a.id===_affTmplEditId&&a.type==='tmpl'); if(tm){ tm.name=name; tm.body=body; tm.updatedAt=Date.now(); } }
+  else { affidavits.push({id:'aff_'+Date.now(),type:'tmpl',name:name,body:body,at:Date.now(),updatedAt:Date.now()}); }
   saveAffidavits(); closeModal('affTmplModal'); notify('✅ حُفظ القالب'); renderAffidavitsPage();
 }
 function deleteAffidavitTemplate(id){ if(!confirm('حذف هذا القالب؟'))return; const i=affidavits.findIndex(a=>a.id===id); if(i>-1)affidavits.splice(i,1); saveAffidavits(); renderAffidavitsPage(); }
@@ -3152,7 +3187,7 @@ function printAffidavitOnForm(){
 }
 function _affSaveBgSettings(){
   const tm=affidavits.find(a=>a.id===_affFillTmplId&&a.type==='tmpl'); if(!tm){notify('احفظ من قالب','warn');return;}
-  tm.bgFormId=_affBgSettings.formId; tm.bgTop=_affBgSettings.top; tm.bgSide=_affBgSettings.side; tm.bgFont=_affBgSettings.font; tm.bgLine=_affBgSettings.line;
+  tm.bgFormId=_affBgSettings.formId; tm.bgTop=_affBgSettings.top; tm.bgSide=_affBgSettings.side; tm.bgFont=_affBgSettings.font; tm.bgLine=_affBgSettings.line; tm.updatedAt=Date.now();
   saveAffidavits(); notify('💾 حُفظت إعدادات النموذج لهذا القالب');
 }
 function saveAffidavitRecord(){
@@ -6429,7 +6464,7 @@ function saveEditedFormFromBuilder(){
   if(fbBoxes.length===0){notify('⚠️ لا حقول على النموذج','warn');return;}
   const name=document.getElementById('fb_name')?.value.trim()||forms[idx].name;
   const fontSize=parseInt(document.getElementById('fb_fontSize')?.value)||currentFontSize||16;
-  forms[idx]={...forms[idx],name,boxes:fbBoxes,image:fbImg,hasImage:!!fbImg,fontSize,noBgPrint:!!(document.getElementById('fb_noBgPrint')||{}).checked,imgW:((document.querySelector('#fbCanvas img')||{}).offsetWidth)||forms[idx].imgW||null};
+  forms[idx]={...forms[idx],name,boxes:fbBoxes,image:fbImg,hasImage:!!fbImg,fontSize,noBgPrint:!!(document.getElementById('fb_noBgPrint')||{}).checked,imgW:((document.querySelector('#fbCanvas img')||{}).offsetWidth)||forms[idx].imgW||null,updatedAt:Date.now()}; // ✅ ختم زمني — كان المسار الوحيد غير المختوم (جذر عدم انتشار الخانات)
   saveForms();
   editingFormId=null;
   const saveBtn=document.querySelector('[onclick="saveEditedFormFromBuilder()"]');
@@ -6540,7 +6575,7 @@ function saveEditedForm(){
   const idx=forms.findIndex(f=>f.id===editingFormId);
   if(idx===-1)return;
   const name=document.getElementById('editFormNewName').value.trim()||forms[idx].name;
-  forms[idx]={...forms[idx],name,boxes:editFbBoxes,image:editFbImg,hasImage:!!editFbImg,fontSize:currentFontSize};
+  forms[idx]={...forms[idx],name,boxes:editFbBoxes,image:editFbImg,hasImage:!!editFbImg,fontSize:currentFontSize,updatedAt:Date.now()}; // ✅ ختم زمني: الأحدث يفوز على كل الأجهزة
   saveForms();closeModal('editFormModal');notify('✅ تم حفظ التعديلات: '+name);renderFormsPage();
 }
 
@@ -7015,7 +7050,7 @@ function saveFormBuild(){
   if(fbBoxes.length===0){notify('⚠️ أضف حقولاً أولاً','warn');return;}
   const name=document.getElementById('fb_name').value.trim()||'نموذج '+(forms.length+1);
   const fontSize=parseInt(document.getElementById('fb_fontSize').value)||16;
-  forms.push({id:'f_'+Date.now(),name,boxes:fbBoxes,image:fbImg,hasImage:!!fbImg,fontSize,reg:activeReg,noBgPrint:!!(document.getElementById('fb_noBgPrint')||{}).checked,imgW:((document.querySelector('#fbCanvas img')||{}).offsetWidth)||null});
+  forms.push({id:'f_'+Date.now(),name,boxes:fbBoxes,image:fbImg,hasImage:!!fbImg,fontSize,reg:activeReg,noBgPrint:!!(document.getElementById('fb_noBgPrint')||{}).checked,imgW:((document.querySelector('#fbCanvas img')||{}).offsetWidth)||null,updatedAt:Date.now()});
   saveForms();notify('✅ تم حفظ النموذج: '+name);showPage('forms',document.querySelectorAll('.nav-item')[4]);
 }
 
@@ -7771,10 +7806,29 @@ function _waSend(phone,text){
   if(_isMobileDevice()){
     window.open('https://wa.me/'+cp+'?text='+enc,'_blank');
   }else{
-    _copyText(text); // نسخة احتياطية على الكمبيوتر
-    window.open('https://web.whatsapp.com/send?phone='+cp+'&text='+enc,'_blank');
-    notify('\u{1F4CB} نُسخت الرسالة احتياطياً — إذا ظهرت الإيموجي مكسورة على واتساب ويب، اضغط Ctrl+A ثم Ctrl+V');
+    _copyText(text); // نسخة احتياطية دائماً
+    _waDesktopApp(cp,enc); // ✅ تطبيق واتساب ديسكتوب أولاً، ويب تلقائياً إن لم يكن مركّباً
   }
+}
+// يفتح تطبيق واتساب على الكمبيوتر عبر بروتوكول whatsapp:// — أسرع من الويب.
+// إن لم يستجب التطبيق خلال 1.6 ثانية (غير مركّب على هذا الجهاز) نفتح واتساب ويب تلقائياً.
+function _waDesktopApp(cp,enc){
+  var left=false, onBlur=function(){left=true;};
+  try{ window.addEventListener('blur',onBlur); }catch(_e){}
+  try{
+    var a=document.createElement('a'); a.href='whatsapp://send?phone='+cp+'&text='+enc;
+    a.style.display='none'; document.body.appendChild(a); a.click();
+    setTimeout(function(){ try{document.body.removeChild(a);}catch(_e){} },400);
+  }catch(_e){}
+  setTimeout(function(){
+    try{ window.removeEventListener('blur',onBlur); }catch(_e){}
+    if(!left && document.hasFocus && document.hasFocus()){
+      window.open('https://web.whatsapp.com/send?phone='+cp+'&text='+enc,'_blank');
+      notify('\u{1F310} فُتح واتساب ويب (تطبيق واتساب غير مركّب على هذا الجهاز) — الرسالة منسوخة: Ctrl+V إذا لزم');
+    }else{
+      notify('\u{1F4F2} فُتح تطبيق واتساب — الرسالة منسوخة احتياطياً (Ctrl+V إذا لزم)');
+    }
+  },1600);
 }
 // نسخة تستقبل رابط wa.me جاهزاً (للأماكن التي تبنيه ضمن HTML): تحوّله لواتساب ويب على الكمبيوتر
 function _waGo(url){
@@ -7784,8 +7838,7 @@ function _waGo(url){
     if(!_isMobileDevice()){
       var txt=''; try{txt=decodeURIComponent(enc);}catch(_e){}
       if(txt)_copyText(txt);
-      window.open('https://web.whatsapp.com/send?phone='+cp+'&text='+enc,'_blank');
-      notify('\u{1F4CB} نُسخت الرسالة — إذا الإيموجي مكسورة الصقها بـ Ctrl+V');
+      _waDesktopApp(cp,enc); // ✅ التطبيق أولاً، ويب تلقائياً عند غيابه
       return;
     }
   }catch(_e){}
