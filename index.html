@@ -766,11 +766,13 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
       <div class="form-grid" style="margin-bottom:12px">
         <div class="form-field"><label>المواطن *</label><input type="text" id="cmpCitName" placeholder="ابحث..." oninput="searchCmpCit(this.value)"><div id="cmpCitSug" style="position:relative"></div></div>
         <div class="form-field"><label>هاتف الواتساب</label><input type="tel" id="cmpPhone" placeholder="9613456789" style="direction:ltr;text-align:right"></div>
-        <div class="form-field"><label>المبلغ الإجمالي المستلم (ل.ل)</label><input type="number" id="cmpPaid" placeholder="0" min="0" oninput="calcCmpProfit()"></div>
-        <div class="form-field"><label>حالة الدفع</label>
+        <div class="form-field"><label>السعر الكامل للمواطن (ل.ل)</label><input type="number" id="cmpTotal" placeholder="اتركه فارغاً إن كان المستلم هو الكامل" min="0" oninput="calcCmpProfit()"></div>
+        <div class="form-field"><label>المبلغ المستلم الآن (ل.ل)</label><input type="number" id="cmpPaid" placeholder="0" min="0" oninput="calcCmpProfit()"></div>
+        <div class="form-field"><label>حالة الدفع (تُحسب تلقائياً)</label>
           <select id="cmpPayStatus" style="padding:9px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:Cairo,sans-serif;font-size:13px;width:100%;direction:rtl">
             <option>مدفوع بالكامل</option><option>دفع جزئي</option><option>غير مدفوع</option>
           </select>
+          <div id="cmpRemainLbl" style="font-size:10.5px;color:#E0A44C;margin-top:4px;display:none"></div>
         </div>
       </div>
 
@@ -1439,7 +1441,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 45 · 2026-07-11'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 47 · 2026-07-14'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;
   // 🔑 استعادة جلسة بوابة المندوب بعد التحديث
@@ -3753,6 +3755,7 @@ function saveAgentPayment(){
   const payId='ap_'+Date.now();
   const pdate=document.getElementById('agPayDate').value;
   ag.payments.push({id:payId,date:pdate,amount,note:document.getElementById('agPayNote').value.trim()});
+  ag.updatedAt=Date.now(); // ✅ ختم مالي
   cashEntries.push({id:'c_'+payId,type:'صادر',amount:amount,desc:'دفعة للمندوب: '+ag.name,date:pdate||todayStr(),time:nowTime(),ref:payId}); // خصم من الصندوق
   saveAgents();saveCash();closeModal('agentPayModal');renderAgentDetail();notify('✅ سُجّلت الدفعة وخُصمت من الصندوق');
 }
@@ -3760,6 +3763,7 @@ function deleteAgentPayment(agId,payId){
   if(!confirm('حذف هذه الدفعة؟'))return;
   const ag=agents.find(a=>a.id===agId);if(!ag)return;
   ag.payments=ag.payments.filter(p=>p.id!==payId);
+  ag.updatedAt=Date.now(); // ✅ ختم: الحذف يفوز على النسخ القديمة
   cashEntries=cashEntries.filter(c=>c.ref!==payId); // احذف قيد الصندوق المرتبط
   saveAgents();saveCash();renderAgentDetail();notify('🗑️ تم الحذف');
 }
@@ -4461,6 +4465,10 @@ function renderCmpItems(){
 function calcCmpProfit(){
   const totalAgentCost=_cmpItems.reduce((s,i)=>s+(i.agentCost||0),0);
   const paid=parseFloat(document.getElementById('cmpPaid')?.value)||0;
+  const _tv=parseFloat(document.getElementById('cmpTotal')?.value);
+  const total=(_tv>0?_tv:paid); const rem=Math.max(0,total-paid);
+  const ps=document.getElementById('cmpPayStatus'); if(ps)ps.value=(paid>=total&&total>0)?'مدفوع بالكامل':(paid>0?'دفع جزئي':'غير مدفوع');
+  const rl=document.getElementById('cmpRemainLbl'); if(rl){ rl.style.display=rem>0?'block':'none'; rl.textContent=rem>0?('⚠️ المتبقي على المواطن: '+rem.toLocaleString()+' ل.ل — سيُسجَّل ديناً تلقائياً'):''; }
   const profit=paid-totalAgentCost;
   if(document.getElementById('cmpAgentCostLbl'))document.getElementById('cmpAgentCostLbl').textContent=totalAgentCost.toLocaleString()+' ل.ل';
   if(document.getElementById('cmpPaidLbl'))document.getElementById('cmpPaidLbl').textContent=paid.toLocaleString()+' ل.ل';
@@ -4474,12 +4482,15 @@ function saveCompoundTxn(){
   if(!citName){notify('❌ أدخل اسم المواطن','red');return;}
   if(!_cmpItems.length||!_cmpItems.some(i=>i.desc.trim())){notify('❌ أضف بنداً واحداً على الأقل','red');return;}
   const paid=parseFloat(document.getElementById('cmpPaid').value)||0;
+  const _tv=parseFloat((document.getElementById('cmpTotal')||{}).value);
+  const total=(_tv>0?_tv:paid); // ✅ السعر الكامل الحقيقي (فارغ = المستلم هو الكامل، كعادتك السابقة)
+  if(paid>total){notify('❌ المستلم أكبر من السعر الكامل — صحّح الأرقام','red');return;}
   const totalAgentCost=_cmpItems.reduce((s,i)=>s+(i.agentCost||0),0);
   const profit=paid-totalAgentCost;
   const serial=nextSerial();
   const date=new Date().toLocaleDateString('ar-LB',{year:'numeric',month:'2-digit',day:'2-digit'});
   const time=nowTime();
-  const payStatus=document.getElementById('cmpPayStatus').value;
+  const payStatus=(paid>=total&&total>0)?'مدفوع بالكامل':(paid>0?'دفع جزئي':'غير مدفوع'); // ✅ محسوبة من الأرقام لا من القائمة
   const note=document.getElementById('cmpNote').value.trim();
   const phone=document.getElementById('cmpPhone').value.trim();
   // Build type string from items
@@ -4490,7 +4501,7 @@ function saveCompoundTxn(){
     citId:_cmpCitId||null,citName,
     type:typeStr,
     date,time,
-    cost:paid,paid,payStatus,note,phone,
+    cost:total,paid,payStatus,note,phone, // ✅ سعر البيع الحقيقي = الكامل
     isCompound:true,
     stage:'عند المندوب',
     compoundItems:_cmpItems.map(i=>({...i})),
@@ -4513,10 +4524,13 @@ function saveCompoundTxn(){
       txnId:t.id,citizenName:citName,status:'قيد الإنجاز',returnDate:null});
   });
   saveAgents();
-  // Debt if partial
-  if(payStatus!=='مدفوع بالكامل'&&_cmpCitId){
-    debts.push({id:'d_'+Date.now(),txnRef:t.id,name:citName,amount:paid,paid:0,remaining:paid,reason:'معاملة مركبة #'+formatSerial(serial),date,status:'قائم'});
-    saveDebts();
+  // ✅ دَين بالمتبقي الصحيح (كامل − مستلم) — على النموذج الموحّد نفسه
+  const _rem=Math.max(0,total-paid);
+  if(_rem>0){
+    if(_cmpCitId||citName){
+      debts.push({id:'d_'+Date.now(),txnRef:t.id,name:citName,amount:_rem,paid:0,remaining:_rem,reason:'معاملة مركبة #'+formatSerial(serial),date,status:'قائم',updatedAt:Date.now()});
+      saveDebts();
+    }
   }
   closeModal('compoundTxnModal');
   renderSideList();
@@ -5389,7 +5403,7 @@ function changeSubItemAgent(itemId,agentId){
   const it=t.subItems.find(x=>x.id===itemId); if(!it)return;
   const oldAg=agents.find(a=>a.id===it.agentId), newAg=agents.find(a=>a.id===agentId);
   it.agentId=agentId||'';
-  saveTxns();
+  (t.updatedAt=Date.now()),saveTxns();
   notify(newAg?('🚚 نُقل البند إلى '+newAg.name+(oldAg?' (بدل '+oldAg.name+')':'')):'أُزيل المندوب عن البند');
   renderSubItemsModal(); _reRenderTxnViews();
 }
@@ -5399,7 +5413,7 @@ function changeSubItemCost(itemId,val){
   const it=t.subItems.find(x=>x.id===itemId); if(!it)return;
   const nc=parseFloat(val); it.agentCost=(isNaN(nc)||nc<0)?0:nc;
   t.profit=(+t.paid||0)-txnBuy(t);
-  saveTxns();
+  (t.updatedAt=Date.now()),saveTxns();
   notify('💾 حُدّثت تكلفة البند — الإجمالي: '+txnBuy(t).toLocaleString()+' ل.ل');
   renderSubItemsModal(); _reRenderTxnViews();
 }
@@ -5409,8 +5423,8 @@ function toggleSubItem(itemId){
   it.status=it.status==='مسترجع'?'قيد الإنجاز':'مسترجع';
   const all=t.subItems.length>0 && t.subItems.every(x=>x.status==='مسترجع');
   const cur=txnStage(t);
-  if(all && cur!=='سُلّمت' && cur!=='جاهزة'){ t.stage='جاهزة'; t.stageAt=Date.now(); if(!Array.isArray(t.stageLog))t.stageLog=[]; t.stageLog.push({s:'جاهزة',at:Date.now()}); notify('✅ اكتملت كل البنود — الخدمة #'+formatSerial(t.serial)+' جاهزة للتسليم'); }
-  else if(!all && cur==='جاهزة'){ t.stage='عند المندوب'; t.stageAt=Date.now(); if(!Array.isArray(t.stageLog))t.stageLog=[]; t.stageLog.push({s:'عند المندوب',at:Date.now()}); }
+  if(all && cur!=='سُلّمت' && cur!=='جاهزة'){ t.stage='جاهزة'; t.stageAt=Date.now(); t.updatedAt=Date.now(); if(!Array.isArray(t.stageLog))t.stageLog=[]; t.stageLog.push({s:'جاهزة',at:Date.now()}); notify('✅ اكتملت كل البنود — الخدمة #'+formatSerial(t.serial)+' جاهزة للتسليم'); }
+  else if(!all && cur==='جاهزة'){ t.stage='عند المندوب'; t.stageAt=Date.now(); t.updatedAt=Date.now(); if(!Array.isArray(t.stageLog))t.stageLog=[]; t.stageLog.push({s:'عند المندوب',at:Date.now()}); }
   saveTxns();
   renderSubItemsModal();
   _reRenderTxnViews();
@@ -5429,7 +5443,7 @@ function txnProfitStats(){
 // نقل المعاملة بين المراحل (مع ختم الوقت للتقادم والمحاسبة)
 function advanceTxnStage(id,newStage){
   const t=transactions.find(x=>x.id===id); if(!t||!TXN_STAGES[newStage])return;
-  t.stage=newStage; t.stageAt=Date.now();
+  t.stage=newStage; t.stageAt=Date.now(); t.updatedAt=Date.now();
   if(newStage==='سُلّمت')t.deliveredAt=Date.now();
   if(!Array.isArray(t.stageLog))t.stageLog=[];
   t.stageLog.push({s:newStage,at:Date.now()});
@@ -5508,7 +5522,7 @@ function returnTxnForCorrection(txnId){
   if(!last){notify('لا يوجد مندوب سابق لهذه المعاملة','warn');return;}
   const ag=agents.find(a=>a.id===last.agentId);
   last.status='active'; delete last.doneAt; last.correction=true; // نفس الحلقة، نفس التكلفة
-  t.agentId=last.agentId; t.stage='عند المندوب'; t.stageAt=Date.now();
+  t.agentId=last.agentId; t.stage='عند المندوب'; t.stageAt=Date.now(); t.updatedAt=Date.now();
   if(!Array.isArray(t.stageLog))t.stageLog=[];
   t.stageLog.push({s:'عند المندوب',at:Date.now(),ag:(ag?ag.name:''),note:'إرجاع للتصحيح'});
   saveTxns();
@@ -5529,7 +5543,7 @@ function confirmAgentTransfer(){
     active.status='done'; active.doneAt=Date.now();
   }
   ch.push({agentId:agentId, cost:cost, at:Date.now(), status:'active'});
-  t.agentId=agentId; t.stage='عند المندوب'; t.stageAt=Date.now();
+  t.agentId=agentId; t.stage='عند المندوب'; t.stageAt=Date.now(); t.updatedAt=Date.now();
   if(!Array.isArray(t.stageLog))t.stageLog=[];
   const agName=(agents.find(a=>a.id===agentId)||{}).name;
   t.stageLog.push({s:'عند المندوب',at:Date.now(),ag:agName});
@@ -5887,10 +5901,13 @@ function saveTxn(){
   }
   // Auto debt entry when there's an unpaid balance
   const unpaidBalance=(t.cost||0)-(t.paid||0);
+  if(unpaidBalance>0 && !t.citId){
+    notify('⚠️ متبقٍ '+unpaidBalance.toLocaleString()+' ل.ل ولن يُسجَّل ديناً — المعاملة غير مربوطة بمواطن. اربطها بمواطن أو حصِّل كاملاً.','warn');
+  }
   if(unpaidBalance>0 && t.citId){
     const existing=debts.find(d=>d.txnRef===t.id);
     if(!existing){
-      debts.push({id:'d_'+Date.now(),txnRef:t.id,name:t.citName||'مجهول',amount:unpaidBalance,paid:0,remaining:unpaidBalance,reason:'معاملة #'+formatSerial(t.serial)+' - '+t.type,date:t.date,status:'قائم'});
+      debts.push({id:'d_'+Date.now(),updatedAt:Date.now(),txnRef:t.id,name:t.citName||'مجهول',amount:unpaidBalance,paid:0,remaining:unpaidBalance,reason:'معاملة #'+formatSerial(t.serial)+' - '+t.type,date:t.date,status:'قائم'});
       saveDebts();
       notify(`⚠️ تم نقل الرصيد المتبقي (${unpaidBalance.toLocaleString()} ل.ل) إلى الديون`,'warn');
     }
@@ -5909,9 +5926,30 @@ function saveTxn(){
   else if(currentPage==='citizen_detail')renderCitizenDetail();
 }
 function deleteTxn(id){
-  if(!confirm('حذف هذه المعاملة؟'))return;
-  transactions=transactions.filter(t=>t.id!==id);saveTxns();
-  notify('🗑️ تم الحذف');
+  const t=transactions.find(x=>x.id===id);
+  const d=_linkedDebt(id);
+  const payCnt=d&&Array.isArray(d.payments)?d.payments.length:0;
+  // 💰 أثر الحذف على مستحقات المناديب المؤكَّدة (سلسلة مستلَمة + بنود مؤكَّدة + بنود مركبة مسترجعة)
+  let agDue=0;
+  if(t){
+    (t.agentChain||[]).forEach(l=>{ if(l.status==='done') agDue+=(+l.cost||0); });
+    (t.subItems||[]).forEach(i=>{ if(i.status==='مسترجع') agDue+=(+i.agentCost||0); });
+  }
+  agents.forEach(a=>(a.items||[]).forEach(it=>{ if(it.txnId===id&&it.status==='مسترجع') agDue+=(+it.cost||0); }));
+  let msg='حذف هذه المعاملة؟';
+  if(payCnt>0) msg+='\n\n⚠️ عليها '+payCnt+' دفعة مسجّلة ('+((+d.paid||0)).toLocaleString()+' ل.ل) — سيبقى الدين وسجلّ دفعاته محفوظاً للمرجعية، وقيود الصندوق لن تُمسّ (مال قُبض فعلاً).';
+  if(agDue>0) msg+='\n\n⚠️ تتضمن تكلفة مؤكَّدة لمندوب ('+agDue.toLocaleString()+' ل.ل) — حذفها سيُنقص مستحقّه. تأكد من تسوية حسابه أولاً.';
+  if(!confirm(msg))return;
+  transactions=transactions.filter(x=>x.id!==id);saveTxns();
+  if(d){
+    if(payCnt===0){ debts=debts.filter(x=>x.id!==d.id); saveDebts(); } // 🧹 دين شبح بلا دفعات — يُزال معها
+    else { d.note=((d.note||'')+' | ⚠️ حُذفت المعاملة الأصلية بتاريخ '+todayStr()).trim(); d.updatedAt=Date.now(); saveDebts(); }
+  }
+  // 🧹 بنود مركبة معلّقة عند المناديب (لم تُسترجع = لا مال مؤكّد) تُزال
+  let agTouched=false;
+  agents.forEach(a=>{ const before=(a.items||[]).length; a.items=(a.items||[]).filter(it=>!(it.txnId===id&&it.status!=='مسترجع')); if(a.items.length!==before){a.updatedAt=Date.now();agTouched=true;} });
+  if(agTouched)saveAgents();
+  notify('🗑️ تم الحذف'+(payCnt>0?' — الدين وسجلّ الدفعات محفوظان':''));
   if(currentPage==='transactions')renderTransactionsPage();
   else renderCitizenDetail();
 }
@@ -7077,6 +7115,32 @@ document.addEventListener('mousemove',e=>{
 document.addEventListener('mouseup',()=>{if(_dragEl){if(_dragCB)_dragCB();_dragEl=null;_dragCB=null;}});
 
 // ===== CASHBOX PAGE =====
+// 🧾 التسوية المحاسبية: تفكيك رصيد الصندوق إلى مصادره — المجموع يجب أن يساوي الرصيد بالقرش
+function _cashBreakdown(){
+  const B={txn:{i:0,o:0},agent:{i:0,o:0},stamp:{i:0,o:0},manual:{i:0,o:0}};
+  cashEntries.forEach(c=>{
+    const amt=parseFloat(c.amount)||0, k=(c.type==='وارد')?'i':'o', r=String(c.ref||''), d=String(c.desc||'');
+    let b='manual';
+    if(r.indexOf('t_')===0) b='txn';
+    else if(r.indexOf('ap_')===0) b='agent';
+    else if(r.indexOf('s_')===0) b='stamp';
+    else if(d.indexOf('دفعة للمندوب')===0) b='agent';                 // قيود قديمة قبل الربط
+    else if(d.indexOf('بيع ')===0||d.indexOf('شراء ')===0) b='stamp'; // قيود طوابع قديمة
+    else if(d.indexOf('معاملة')===0||d.indexOf('دفعة:')===0) b='txn'; // قيود معاملات/دفعات قديمة
+    B[b][k]+=amt;
+  });
+  return B;
+}
+function _cashBreakdownRows(){
+  const B=_cashBreakdown();
+  const net=x=>x.i-x.o;
+  return {B,rows:[
+    {t:'محصّل المعاملات والدفعات',v:net(B.txn),c:'#7DCCA0'},
+    {t:'مدفوع للمناديب',v:net(B.agent),c:'#E88080'},
+    {t:'صافي الطوابع (بيع − شراء)',v:net(B.stamp),c:net(B.stamp)>=0?'#7DCCA0':'#E88080'},
+    {t:'حركات يدوية / أخرى',v:net(B.manual),c:'#88BBE8'}
+  ],sum:net(B.txn)+net(B.agent)+net(B.stamp)+net(B.manual)};
+}
 function renderCashboxPage(){
   const mp=document.getElementById('mainPanel');
   const totalIn=cashEntries.filter(c=>c.type==='وارد').reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
@@ -7100,6 +7164,14 @@ function renderCashboxPage(){
         <div class="stat-card red" style="padding:14px"><div class="sc-label">إجمالي الصادرات</div><div class="sc-value" style="font-size:20px">${totalOut.toLocaleString()}</div><div class="sc-sub">ل.ل</div></div>
         <div class="stat-card blue" style="padding:14px"><div class="sc-label">واردات اليوم</div><div class="sc-value" style="font-size:20px">${todayIn.toLocaleString()}</div><div class="sc-sub">ل.ل</div></div>
       </div>
+      ${(()=>{const bd=_cashBreakdownRows();const ok=bd.sum===balance;return `
+      <div class="recent-card" style="margin-bottom:16px">
+        <div class="recent-header"><h3>🧾 تكوين الرصيد — تسوية محاسبية</h3></div>
+        <div style="padding:6px 14px 12px">
+          ${bd.rows.map(r=>`<div style="display:flex;justify-content:space-between;padding:7px 4px;border-bottom:1px dashed var(--border);font-size:12.5px"><span style="color:var(--text2)">${r.t}</span><b style="color:${r.c};direction:ltr">${r.v.toLocaleString()} ل.ل</b></div>`).join('')}
+          <div style="display:flex;justify-content:space-between;padding:10px 4px 2px;font-size:13.5px;font-weight:800"><span>المجموع (يجب أن يساوي الرصيد)</span><b style="color:${ok?'#7DCCA0':'#E88080'};direction:ltr">${bd.sum.toLocaleString()} ل.ل ${ok?'✓ مطابق':'⚠️ فرق '+(balance-bd.sum).toLocaleString()}</b></div>
+        </div>
+      </div>`;})()}
       <div class="recent-card">
         <div class="recent-header"><h3>حركات الصندوق</h3></div>
         <table class="rtable"><thead><tr><th>النوع</th><th>المبلغ (ل.ل)</th><th>البيان</th><th>التاريخ</th><th>الوقت</th><th></th></tr></thead>
@@ -7134,7 +7206,14 @@ function saveCashEntry(){
   cashEntries.push({id:'c_'+Date.now(),type,amount,desc,date,time:nowTime()});
   saveCash();closeModal('cashEntryModal');renderCashboxPage();notify('✅ تمت إضافة حركة '+type);
 }
-function deleteCashEntry(id){if(!confirm('حذف هذه الحركة؟'))return;cashEntries=cashEntries.filter(c=>c.id!==id);saveCash();renderCashboxPage();}
+function deleteCashEntry(id){
+  const c=cashEntries.find(x=>x.id===id); if(!c)return;
+  const r=String(c.ref||''); let msg='حذف هذه الحركة؟';
+  if(r){ const srcName=r.indexOf('ap_')===0?'دفعة مندوب':(r.indexOf('s_')===0?'حركة طوابع':(r.indexOf('t_')===0?'معاملة/دفعة مواطن':'سجل مرتبط'));
+    msg='⚠️ هذا القيد مرتبط بـ'+srcName+' — حذفه من هنا فقط يفكّ تطابق الصندوق مع السجل الأصلي.\n(الأصح: احذفه من مصدره ليُعكس الطرفان معاً)\n\nمتابعة الحذف من الصندوق فقط؟'; }
+  if(!confirm(msg))return;
+  cashEntries=cashEntries.filter(x=>x.id!==id);saveCash();renderCashboxPage();
+}
 function printCashReport(){
   const totalIn=cashEntries.filter(c=>c.type==='وارد').reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
   const totalOut=cashEntries.filter(c=>c.type==='صادر').reduce((s,c)=>s+(parseFloat(c.amount)||0),0);
@@ -7144,6 +7223,7 @@ function printCashReport(){
   <div class="noprint"><button onclick="window.print()" style="padding:7px 16px;background:#C9A84C;color:#111;border:none;border-radius:5px;cursor:pointer">🖨️</button></div>
   <h1>تقرير الصندوق — ${new Date().toLocaleDateString('ar-LB')}</h1>
   <p style="margin-bottom:10px">الرصيد: <strong>${(totalIn-totalOut).toLocaleString()} ل.ل</strong> | واردات: ${totalIn.toLocaleString()} | صادرات: ${totalOut.toLocaleString()}</p>
+  ${(()=>{const bd=_cashBreakdownRows();return `<table style="margin-bottom:12px;width:auto"><thead><tr><th colspan="2">تكوين الرصيد (تسوية)</th></tr></thead><tbody>${bd.rows.map(r=>`<tr><td>${r.t}</td><td style="font-weight:bold;direction:ltr">${r.v.toLocaleString()} ل.ل</td></tr>`).join('')}<tr><td style="font-weight:bold">المجموع</td><td style="font-weight:bold;direction:ltr">${bd.sum.toLocaleString()} ل.ل</td></tr></tbody></table>`;})()}
   <table><thead><tr><th>النوع</th><th>المبلغ</th><th>البيان</th><th>التاريخ</th><th>الوقت</th></tr></thead><tbody>${rows}</tbody></table>
   </body></html>`);w.document.close();setTimeout(()=>w.print(),300);
 }
@@ -7201,8 +7281,9 @@ function applyDebtPayment(d,amount){
   if(!Array.isArray(d.payments))d.payments=[];
   d.paid=(+d.paid||0)+amount;
   d.payments.push({amount:amount,date:todayStr(),at:Date.now()});
+  d.updatedAt=Date.now(); // ✅ ختم مالي: الدفعة تفوز على أي نسخة قديمة في كل الأجهزة
   const txn=d.txnRef?transactions.find(t=>t.id===d.txnRef):null;
-  if(txn){ txn.paid=(+txn.paid||0)+amount; d.remaining=Math.max(0,(+txn.cost||0)-(+txn.paid||0)); }
+  if(txn){ txn.paid=(+txn.paid||0)+amount; txn.updatedAt=Date.now(); d.remaining=Math.max(0,(+txn.cost||0)-(+txn.paid||0)); }
   else { d.remaining=Math.max(0,(+d.amount||0)-(+d.paid||0)); }
   d.status=d.remaining<=0?'مسدّد':d.paid>0?'جزئي':'قائم';
   if(txn) txn.payStatus=d.remaining<=0?'مدفوع بالكامل':'دفع جزئي';
@@ -7311,12 +7392,12 @@ function setTxnCost(){
   const nc=parseFloat(document.getElementById('tpCost').value);
   if(isNaN(nc)||nc<0){notify('❌ سعر بيع غير صحيح','red');return;}
   const nb=parseFloat((document.getElementById('tpBuyCost')||{}).value)||0;
-  t.cost=nc; t.buyCost=nb<0?0:nb;
+  t.cost=nc; t.buyCost=nb<0?0:nb; t.updatedAt=Date.now(); // ✅ ختم مالي
   const paid=+t.paid||0;
   t.payStatus=paid>=nc?'مدفوع بالكامل':paid>0?'دفع جزئي':'غير مدفوع';
   t.profit=paid-(t.buyCost||0);
   const d=_linkedDebt(t.id); const rem=Math.max(0,nc-paid);
-  if(d){ d.amount=Math.max(0,nc-(paid-(+d.paid||0))); d.remaining=rem; d.status=rem<=0?'مسدّد':d.paid>0?'جزئي':'قائم'; }
+  if(d){ d.amount=Math.max(0,nc-(paid-(+d.paid||0))); d.remaining=rem; d.status=rem<=0?'مسدّد':d.paid>0?'جزئي':'قائم'; d.updatedAt=Date.now(); }
   else if(rem>0){ debts.push({id:'d_'+Date.now(),txnRef:t.id,name:t.citName||'مجهول',amount:rem,paid:0,remaining:rem,reason:'معاملة #'+formatSerial(t.serial)+' - '+(t.type||''),date:t.date||todayStr(),status:'قائم',payments:[]}); }
   saveTxns(); saveDebts();
   notify('💾 حُفظ سعر البيع والتكلفة');
@@ -7391,7 +7472,19 @@ function confirmPayDebt(){
   else if(currentPage==='transactions') renderTransactionsPage();
   renderSideList();
 }
-function deleteDebt(id){if(!confirm('حذف هذا الدين؟'))return;debts=debts.filter(d=>d.id!==id);saveDebts();renderDebtsPage();}
+function deleteDebt(id){
+  const d=debts.find(x=>x.id===id); if(!d)return;
+  const pc=Array.isArray(d.payments)?d.payments.length:0, rem=+d.remaining||0;
+  let msg='حذف هذا الدين؟';
+  if(pc>0||rem>0){
+    msg='⚠️ تنبيه محاسبي:\n'
+      +(pc>0?('• عليه '+pc+' دفعة مسجّلة ('+((+d.paid||0)).toLocaleString()+' ل.ل) — قيود الصندوق لن تُمسّ (مال قُبض فعلاً).\n'):'')
+      +(rem>0?('• لا يزال متبقياً '+rem.toLocaleString()+' ل.ل — حذفه يُسقط هذا الحق من الدفاتر.\n'):'')
+      +'\nمتابعة الحذف؟';
+  }
+  if(!confirm(msg))return;
+  debts=debts.filter(x=>x.id!==id);saveDebts();renderDebtsPage();
+}
 
 // ===== STAMPS PAGE =====
 // ===== STAMPS - VISUAL CARD SYSTEM =====
@@ -7633,12 +7726,20 @@ function saveStampEntry(){
   const type=_stampModalType;
   if(type==='بيع'&&getGroupStock(gid,iid).stock<qty){notify('⚠️ المخزون المتاح: '+getGroupStock(gid,iid).stock,'warn');return;}
   const total=qty*up;
-  stamps.push({id:'s_'+Date.now(),type,groupId:gid,groupName:g.name,itemId:iid,itemName:it.name,qty,unitPrice:up,total,desc:document.getElementById('stDesc').value.trim(),date:todayStr(),time:nowTime()});
+  const sid='s_'+Date.now();
+  stamps.push({id:sid,type,groupId:gid,groupName:g.name,itemId:iid,itemName:it.name,qty,unitPrice:up,total,desc:document.getElementById('stDesc').value.trim(),date:todayStr(),time:nowTime()});
   saveStamps();
-  cashEntries.push({id:'c_'+Date.now(),type:(type==='بيع'?'وارد':'صادر'),amount:total,desc:(type==='بيع'?'بيع ':'شراء ')+qty+' '+it.name+' ('+g.name+')',date:todayStr(),time:nowTime()});
+  cashEntries.push({id:'c_'+sid,type:(type==='بيع'?'وارد':'صادر'),amount:total,desc:(type==='بيع'?'بيع ':'شراء ')+qty+' '+it.name+' ('+g.name+')',date:todayStr(),time:nowTime(),ref:sid}); // ✅ مربوط بالحركة للعكس عند الحذف
   saveCash();is.disabled=false;closeModal('stampModal');renderStampsPage();notify('✅ تم تسجيل '+type+' '+qty+' '+it.name);
 }
-function delStamp(id){if(!confirm('حذف؟'))return;stamps=stamps.filter(s=>s.id!==id);saveStamps();renderStampsPage();}
+function delStamp(id){
+  if(!confirm('حذف هذه الحركة؟ سيُعكس قيدها من الصندوق أيضاً.'))return;
+  stamps=stamps.filter(s=>s.id!==id);saveStamps();
+  const before=cashEntries.length;
+  cashEntries=cashEntries.filter(c=>c.ref!==id);
+  if(cashEntries.length!==before)saveCash(); // ✅ عكس قيد الصندوق المرتبط (الحركات الجديدة)
+  renderStampsPage();notify('🗑️ حُذفت الحركة'+(cashEntries.length!==before?' وعُكس قيد الصندوق':''));
+}
 function printStampsReport(){
   let rows='';
   stampGroups.forEach(g=>g.items.forEach(it=>{
