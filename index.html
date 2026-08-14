@@ -1441,7 +1441,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 50 · 2026-07-14'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 56 · 2026-08-14'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;
   // 🔑 استعادة جلسة بوابة المندوب بعد التحديث
@@ -5054,7 +5054,15 @@ function renderTabContent(tab,c){
     activateFieldDragDrop();
   }
   else if(tab==='myforms'){
-    tc.innerHTML=`<div class="form-section"><div class="form-section-title">📋 نماذجي</div>${forms.length===0?`<div class="empty-state" style="height:200px"><div class="e-icon">📋</div><p>لا نماذج. <a href="#" onclick="showPage('formbuilder')" style="color:var(--gold)">أنشئ نموذجاً</a></p></div>`:`<div class="form-card-grid">${forms.map(fm=>`<div class="form-card"><div class="form-card-title">📄 ${fm.name}</div><div class="form-card-meta">${fm.boxes.length} حقل · ${fm.hasImage?'مع صورة':'بدون صورة'}</div><div class="form-card-actions"><button class="btn btn-gold" onclick="previewFormPrompt('${fm.id}')" style="font-size:11px;padding:5px 10px">👁️ معاينة</button></div></div>`).join('')}</div>`}</div>`;
+    tc.innerHTML=`<div class="form-section"><div class="form-section-title">📋 نماذجي</div>${(()=>{
+      const cReg=(c&&c.reg)||'lb';
+      const _rc={lb:'#4C8BC9',sy:'#E0A44C',ps:'#4CAF7A'};
+      const fl=[...forms].sort((a,b)=>((((b.reg||'lb')===cReg)?1:0)-(((a.reg||'lb')===cReg)?1:0)));
+      if(!fl.length) return `<div class="empty-state" style="height:200px"><div class="e-icon">📋</div><p>لا نماذج. <a href="#" onclick="showPage('formbuilder')" style="color:var(--gold)">أنشئ نموذجاً</a></p></div>`;
+      return `<div style="font-size:10.5px;color:var(--text3);margin-bottom:9px">🗂️ مرتّبة: نماذج ${regLabel(cReg)} أولاً · النماذج المخالفة للجنسية مُخفَّتة وعليها تنبيه عند الفتح</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;align-items:start">${fl.map(fm=>{
+        const fr=(fm.reg||'lb'); const match=fr===cReg; const col=_rc[fr]||'#4C8BC9';
+        return `<div style="background:var(--navy2);border:1px solid ${match?col+'80':'var(--border)'};border-radius:14px;overflow:hidden;min-width:0${match?'':';opacity:.68'}"><div onclick="previewFormPromptGuard('${fm.id}')" title="${match?'معاينة معبأة بمعلومات المواطن':'⚠️ نموذج '+regLabel(fr)+' — سيظهر تنبيه'}" style="position:relative;height:130px;background:${fm.image?'#f4f1ea':'var(--navy3)'};display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;border-bottom:1px solid var(--border)">${fm.image?`<img src="${fm.image}" style="max-width:100%;max-height:100%;object-fit:contain" loading="lazy">`:`<span style="font-size:40px">📄</span>`}<span style="position:absolute;top:6px;right:6px;background:${col}26;border:1px solid ${col}99;color:${col};font-size:9.5px;font-weight:800;padding:2px 8px;border-radius:10px">${regIcon(fr)} ${regLabel(fr)}</span></div><div style="padding:10px"><div style="font-size:12.5px;font-weight:800;color:var(--text);line-height:1.5;margin-bottom:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" title="${fm.name}">${fm.name}</div><div style="font-size:10px;color:var(--text3);margin-bottom:8px">${fm.boxes.length} حقل · ${fm.hasImage?'مع صورة':'بدون صورة'}</div><button class="btn btn-gold" onclick="previewFormPromptGuard('${fm.id}')" style="font-size:11px;width:100%;justify-content:center">👁️ معاينة وطباعة</button></div></div>`;}).join('')}</div>`;
+    })()}</div>`;
   }
   else if(tab==='cit_txns'){
     const citTxns=transactions.filter(t=>t.citId===c.id);
@@ -5671,6 +5679,10 @@ function renderTransactionsPage(){
     <div class="page-header">
       <div><div class="page-title">سجل المعاملات</div><div class="page-sub">${transactions.length} معاملة · الرقم التالي: <strong style="color:var(--gold)">#${formatSerial(nextSerial())}</strong></div></div>
       <div class="page-actions">
+        <div style="display:flex;border:1px solid var(--border);border-radius:9px;overflow:hidden">
+          <button class="btn" onclick="setTxnView('cards')" style="border:none;border-radius:0;font-size:12px;padding:7px 13px;background:${_txnViewMode()==='cards'?'var(--gold)':'transparent'};color:${_txnViewMode()==='cards'?'#1a1206':'var(--text2)'}">⬜ بطاقات</button>
+          <button class="btn" onclick="setTxnView('table')" style="border:none;border-radius:0;font-size:12px;padding:7px 13px;background:${_txnViewMode()==='table'?'var(--gold)':'transparent'};color:${_txnViewMode()==='table'?'#1a1206':'var(--text2)'}">☰ جدول</button>
+        </div>
         <button class="btn btn-outline" onclick="openWaEditor()">💬 رسائل واتساب</button>
         <button class="btn btn-outline" onclick="printTxnsReport()">🖨️ تقرير</button>
         <button class="btn btn-blue" onclick="openCompoundTxnModal()">📋 معاملة مركبة</button>
@@ -5729,16 +5741,49 @@ function renderTransactionsPage(){
           <option value="">كل الأنواع</option><option value="official">📋 رسمية</option><option value="private">🚗 خدمات خاصة</option>
         </select>
       </div>
+      ${_txnViewMode()==='table'?`
       <div class="recent-card">
         <table class="rtable"><thead><tr><th>#</th><th>المواطن</th><th>الخدمة</th><th>التاريخ</th><th>الوقت</th><th>التكلفة</th><th>المدفوع</th><th>الفرق</th><th>المسار / الدفع</th><th></th></tr></thead>
         <tbody id="txnTbody"></tbody></table>
       </div>
+      `:`<div id="txnCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start"></div>`}
     </div>`;
   renderTxnStageChips();
   applyTxnFilters();
 }
+// ─── مصدر واحد لعرض المسار/الدفع وأزرار المعاملة (يستعمله الجدول والبطاقات معاً) ───
+function txnPathCell(t,alignEnd){
+  return `<div style="display:flex;flex-direction:column;gap:3px;align-items:${alignEnd?'flex-end':'flex-start'}">${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="تعديل الدفع / إضافة دفعة / سجل الدفعات">${payChip(t)}</span>${t.agentId&&txnStage(t)==='عند المندوب'?`<span style="font-size:9px;color:#E0A44C;font-weight:700" title="المندوب الحالي">🚚 ${esc((agents.find(a=>a.id===t.agentId)||{}).name||'—')}</span>`:''}</div>`;
+}
+function txnActionsRow(t,wrap){
+  return `<div style='display:flex;gap:3px;align-items:center;flex-wrap:${wrap?'wrap':'nowrap'}'>${txnStageBtns(t)}<span style="width:1px;height:16px;background:var(--border);margin:0 1px"></span><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px' title='واتساب: استلام'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px' title='واتساب: قيد الإنجاز'>⏳</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px' title='واتساب: جاهزة'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)' title='واتساب: تم التسليم'>🤝</button><button class='btn' onclick="sendWhatsAppEditable('${t.id}','تأخير')" style='font-size:10px;padding:3px 5px;background:rgba(232,128,76,0.15);color:#E8804C;border:1px solid rgba(232,128,76,0.4)' title='اعتذار تأخير (قابل للتعديل قبل الإرسال)'>⏰</button>${Array.isArray(t.subItems)&&t.subItems.length?`<button class='btn' onclick="openSubItems('${t.id}')" style='font-size:10px;padding:3px 5px;background:rgba(224,164,76,0.15);color:#E0A44C;border:1px solid rgba(224,164,76,0.4)' title='بنود الخدمة (${t.subItems.filter(i=>i.status==='مسترجع').length}/${t.subItems.length})'>🧩</button>`:''}<button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px' title='حذف'>🗑️</button></div>`;
+}
+// ─── وضع العرض: بطاقات (افتراضي) أو جدول — محفوظ لكل جهاز ───
+function _txnViewMode(){ return localStorage.getItem('lb_txn_view')||'cards'; }
+function setTxnView(v){ localStorage.setItem('lb_txn_view',v); renderTransactionsPage(); }
 function renderTxnTable(list){
   const sorted=[...list].sort((a,b)=>b.serial-a.serial);
+  const cardsEl=document.getElementById('txnCards');
+  if(cardsEl){ // ⬜ عرض البطاقات — كل معاملة مربّع كامل وأزراره تحته
+    cardsEl.innerHTML=sorted.length===0?`<div style="grid-column:1/-1;text-align:center;padding:36px;color:var(--text3)">لا معاملات مطابقة</div>`:
+      sorted.map(t=>{const rem=(+t.cost||0)-(+t.paid||0);const adv=(+t.cost||0)<=0&&(+t.paid||0)>0;
+        return `<div style="display:block;background:var(--navy2);border:1px solid var(--border);border-radius:14px;padding:13px;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <div style="color:var(--gold);font-weight:800;font-size:13px;white-space:nowrap">${txnAgeLevel(t)===2?'🔴 ':txnAgeLevel(t)===1?'🟡 ':''}${txnKind(t)==='private'?'🚗 '+formatSerial(t.serial):'#'+formatSerial(t.serial)}</div>
+          <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="ملف الدفع: دفعات وسجل وسعر">${payChip(t)}</span></div>
+        </div>
+        <div onclick="if('${t.citId||''}'){currentCitId='${t.citId}';showPage('citizen_detail');}" style="font-size:16px;font-weight:800;color:var(--text);cursor:${t.citId?'pointer':'default'};margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.citName||'')}">${esc(t.citName||'—')}</div>
+        <div style="font-size:11.5px;color:var(--text2);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.type||'')}">${esc(t.type||'—')}</div>
+        <div style="font-size:10.5px;color:var(--text3);margin-bottom:10px">📅 <span style="direction:ltr;unicode-bidi:embed">${t.date||'—'}</span> · <span style="direction:ltr;unicode-bidi:embed">${t.time||'—'}</span>${t.agentId&&txnStage(t)==='عند المندوب'?` · <span style="color:#E0A44C;font-weight:700">🚚 ${esc((agents.find(a=>a.id===t.agentId)||{}).name||'—')}</span>`:''}</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <div style="flex:1;background:var(--navy3);border-radius:8px;padding:7px 4px;text-align:center;min-width:0"><div style="font-size:9.5px;color:var(--text3);white-space:nowrap">التكلفة</div><div style="font-size:13px;font-weight:800;color:var(--text);white-space:nowrap">${(+t.cost||0).toLocaleString()}</div></div>
+          <div style="flex:1;background:var(--navy3);border-radius:8px;padding:7px 4px;text-align:center;min-width:0"><div style="font-size:9.5px;color:var(--text3);white-space:nowrap">المدفوع</div><div style="font-size:13px;font-weight:800;color:#7DCCA0;white-space:nowrap">${(+t.paid||0).toLocaleString()}</div></div>
+          <div style="flex:1;background:var(--navy3);border-radius:8px;padding:7px 4px;text-align:center;min-width:0"><div style="font-size:9.5px;color:var(--text3);white-space:nowrap">الباقي</div><div style="font-size:13px;font-weight:800;color:${adv?'#E0A44C':(rem>0?'#E88080':'#7DCCA0')};white-space:nowrap">${adv?'غير محدد':rem.toLocaleString()}</div></div>
+        </div>
+        <div style="border-top:1px dashed var(--border);padding-top:9px">${txnActionsRow(t,true)}</div>
+      </div>`;}).join('');
+    return;
+  }
   document.getElementById('txnTbody').innerHTML=sorted.length===0?
     `<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text3)">لا معاملات بعد</td></tr>`:
     sorted.map(t=>`<tr>
@@ -5750,8 +5795,8 @@ function renderTxnTable(list){
       <td>${(t.cost||0).toLocaleString()}</td>
       <td style="color:#7DCCA0">${(t.paid||0).toLocaleString()}</td>
       <td style="color:${(t.cost-t.paid)>0?'#E88080':'#7DCCA0'}">${((t.cost||0)-(t.paid||0)).toLocaleString()}</td>
-      <td><div style="display:flex;flex-direction:column;gap:3px;align-items:flex-start">${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="تعديل الدفع / إضافة دفعة / سجل الدفعات">${payChip(t)}</span>${t.agentId&&txnStage(t)==='عند المندوب'?`<span style="font-size:9px;color:#E0A44C;font-weight:700" title="المندوب الحالي">🚚 ${esc((agents.find(a=>a.id===t.agentId)||{}).name||'—')}</span>`:''}</div></td>
-      <td><div style='display:flex;gap:3px;align-items:center;flex-wrap:nowrap'>${txnStageBtns(t)}<span style="width:1px;height:16px;background:var(--border);margin:0 1px"></span><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px' title='واتساب: استلام'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px' title='واتساب: قيد الإنجاز'>⏳</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px' title='واتساب: جاهزة'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)' title='واتساب: تم التسليم'>🤝</button><button class='btn' onclick="sendWhatsAppEditable('${t.id}','تأخير')" style='font-size:10px;padding:3px 5px;background:rgba(232,128,76,0.15);color:#E8804C;border:1px solid rgba(232,128,76,0.4)' title='اعتذار تأخير (قابل للتعديل قبل الإرسال)'>⏰</button>${Array.isArray(t.subItems)&&t.subItems.length?`<button class='btn' onclick="openSubItems('${t.id}')" style='font-size:10px;padding:3px 5px;background:rgba(224,164,76,0.15);color:#E0A44C;border:1px solid rgba(224,164,76,0.4)' title='بنود الخدمة (${t.subItems.filter(i=>i.status==='مسترجع').length}/${t.subItems.length})'>🧩</button>`:''}<button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px' title='حذف'>🗑️</button></div></td>
+      <td>${txnPathCell(t,false)}</td>
+      <td>${txnActionsRow(t,false)}</td>
     </tr>`).join('');
 }
 function applyTxnFilters(){
@@ -6121,13 +6166,17 @@ function renderFormsPage(){
     <div class="page-actions"><button class="btn btn-gold" onclick="showPage('formbuilder',document.querySelectorAll('.nav-item')[4])">+ نموذج جديد</button></div></div>
     <div class="panel-content">
       ${fl.length===0?`<div class="empty-state"><div class="e-icon">📋</div><h3>لا توجد نماذج لهذا الملف</h3><p>ابنِ نموذجك الأول</p><button class="btn btn-gold" onclick="showPage('formbuilder')" style="margin-top:12px">+ بناء نموذج</button></div>`:
-      `<div class="form-card-grid">${fl.map(fm=>`<div class="form-card">
-        <div class="form-card-title">📄 ${fm.name}</div>
-        <div class="form-card-meta">${fm.boxes.length} حقل · ${fm.hasImage?'مع صورة':'بدون صورة'} · خط ${fm.fontSize||12}px</div>
-        <div class="form-card-actions">
-          <button class="btn btn-blue" onclick="openEditForm('${fm.id}')" style="font-size:11px">✏️ تعديل</button>
-          <button class="btn btn-green" onclick="previewFormPrompt('${fm.id}')" style="font-size:11px">👁️ معاينة</button>
-          <button class="btn btn-red" onclick="deleteForm('${fm.id}')" style="font-size:11px">🗑️</button>
+      `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;align-items:start">${fl.map(fm=>`<div style="background:var(--navy2);border:1px solid var(--border);border-radius:14px;overflow:hidden;min-width:0">
+        ${fm.image?`<div onclick="previewFormPrompt('${fm.id}')" title="معاينة النموذج" style="height:150px;background:#f4f1ea;display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;border-bottom:1px solid var(--border)"><img src="${fm.image}" style="max-width:100%;max-height:100%;object-fit:contain" loading="lazy"></div>`
+        :`<div onclick="previewFormPrompt('${fm.id}')" style="height:150px;background:var(--navy3);display:flex;align-items:center;justify-content:center;font-size:44px;cursor:pointer;border-bottom:1px solid var(--border)">📄</div>`}
+        <div style="padding:11px">
+          <div style="font-size:13px;font-weight:800;color:var(--text);line-height:1.5;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden" title="${fm.name}">${fm.name}</div>
+          <div style="font-size:10.5px;color:var(--text3);margin-bottom:9px">${fm.boxes.length} حقل · ${fm.hasImage?'مع صورة':'بدون صورة'} · خط ${fm.fontSize||12}px</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;border-top:1px dashed var(--border);padding-top:9px">
+            <button class="btn btn-green" onclick="previewFormPrompt('${fm.id}')" style="font-size:11px;flex:1;justify-content:center">👁️ معاينة</button>
+            <button class="btn btn-blue" onclick="openEditForm('${fm.id}')" style="font-size:11px;flex:1;justify-content:center">✏️ تعديل</button>
+            <button class="btn btn-red" onclick="deleteForm('${fm.id}')" style="font-size:11px">🗑️</button>
+          </div>
         </div>
       </div>`).join('')}</div>`}
     </div>`;
@@ -6261,6 +6310,16 @@ function printTextForm(id,citId){
 let _manualValues={};      // { manual_key : القيمة المكتوبة }
 let _manualPending=null;   // { fid, txnId } بانتظار المتابعة بعد الملء
 function _manualLabelClean(l){ return (l||'').replace(/^\s*✍️\s*/,''); }
+// 🛡️ حارس الجنسية: يمنع فتح نموذج مخالف لجنسية ملف المواطن بالخطأ
+function previewFormPromptGuard(fid){
+  const fm=forms.find(f=>f.id===fid);
+  const c=citizens.find(x=>x.id===currentCitId);
+  const fr=(fm&&fm.reg)||'lb', cr=(c&&c.reg)||'lb';
+  if(fm&&c&&fr!==cr){
+    if(!confirm('⚠️ تنبيه جنسية:\nهذا نموذج «'+regLabel(fr)+'» بينما ملف المواطن «'+regLabel(cr)+'».\n\nمتابعة على هذا النموذج؟')) return;
+  }
+  previewFormPrompt(fid);
+}
 function previewFormPrompt(fid,txnId){
   if(!currentCitId){notify('⚠️ اختر مواطناً أولاً من القائمة','warn');return;}
   const fm=forms.find(function(f){return f.id===fid;});
