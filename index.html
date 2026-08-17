@@ -1441,7 +1441,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 61 · 2026-08-14'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 62 · 2026-08-14'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;
   // 🔑 استعادة جلسة بوابة المندوب بعد التحديث
@@ -1834,22 +1834,6 @@ const ALL_PAGES=[
 function loadPerms(){
   try{const v=localStorage.getItem(PKK);if(v)userPerms=JSON.parse(v);}catch(_){}
   try{const v=localStorage.getItem(UKK);if(v)extraUsers=JSON.parse(v);}catch(_){}
-  // 🔑🔑🔑 مفتاح طوارئ لمرة واحدة — إعادة تعيين كلمة admin إلى 1234 =========================
-  // يعمل مرة واحدة فقط عند أول فتحة لهذه النسخة على كل جهاز، ثم يُعطّل نفسه تلقائياً.
-  // لا يلمس أي بيانات أخرى إطلاقاً (المواطنون، المعاملات، الصندوق، الطوابع... كلها سالمة).
-  try{
-    if(!localStorage.getItem('lb_pwreset_v60_done')){
-      // امسح تجاوز admin (والشاهدة إن وُجدت) → يعود إلى الافتراضية 1234
-      if(extraUsers && extraUsers.admin){ delete extraUsers.admin; }
-      // ابصم واحفظ محلياً كي يفوز هذا التصفير على أي نسخة قديمة في السحابة، ثم ارفعه
-      try{ if(!userPerms||typeof userPerms!=='object')userPerms={}; userPerms._ts=Date.now(); localStorage.setItem(PKK,JSON.stringify(userPerms)); }catch(_e2){}
-      try{ localStorage.setItem(UKK,JSON.stringify(extraUsers)); }catch(_e3){}
-      try{ if(window._fbReady){ _fbSet(PKK,userPerms); _fbSet(UKK,extraUsers); } }catch(_e4){}
-      localStorage.setItem('lb_pwreset_v60_done','1'); // ← تعطيل المفتاح: لن يُعاد التصفير بعد الآن
-      try{ setTimeout(function(){ if(typeof notify==='function') notify('🔑 أُعيدت كلمة admin إلى 1234 — سجّل دخولك ثم غيّرها فوراً من الصلاحيات ← بطاقة الأمان','warn'); },1500); }catch(_e5){}
-    }
-  }catch(_e){}
-  // 🔑🔑🔑 نهاية مفتاح الطوارئ ================================================================
 }
 function savePerms(){
   try{localStorage.setItem(PKK,JSON.stringify(userPerms));}catch(_){}
