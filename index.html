@@ -40,13 +40,32 @@ try {
   firebaseDb = firebase.firestore();
   window._fbDb = firebaseDb;
   window._fbReady = true;
-  // 🔐 توثيق مجهول: يستقر (نجاحاً أو بوضع انتقالي) قبل أي مزامنة — تمهيداً لتشديد القواعد
-  window._fbAuthed=false; window._fbAuthSettled=false;
-  window._fbAuthP=(firebase.auth?firebase.auth().signInAnonymously():Promise.reject({code:'auth-sdk-missing'}))
-    .then(function(){ window._fbAuthed=true; console.log('🔐 توثيق مجهول ✓'); })
-    .catch(function(e){ console.warn('⚠️ التوثيق غير مفعّل بعد ('+((e&&e.code)||'?')+') — وضع انتقالي مسموح بالقواعد الحالية');
-      setTimeout(function(){ try{ notify('🔐 خطوة الأمان: فعِّل Anonymous من Firebase Console (Authentication ← Sign-in method) ثم أعد فتح البرنامج','warn'); }catch(_x){} },2500); })
-    .finally(function(){ window._fbAuthSettled=true; try{ _fbStatus('on'); }catch(_x){} });
+  // 🔐 توثيق الجهاز الحقيقي: جلسة محفوظة → موثّق فعلي؛ لا جلسة → مجهول انتقالياً؛ الكل مرفوض → مطالبة توثيق
+  window._fbAuthed=false; window._fbRealAuth=false; window._fbAuthSettled=false; window._fbAuthDenied=false;
+  window._fbAuthP=new Promise(function(res){ window.__fbAuthRes=res; });
+  window._fbAuthSettle=function(){ if(!window._fbAuthSettled){ window._fbAuthSettled=true; try{window.__fbAuthRes();}catch(_x){} try{_fbStatus('on');}catch(_x){} } };
+  if(firebase.auth){
+    firebase.auth().onAuthStateChanged(function(u){
+      if(u&&!u.isAnonymous){
+        window._fbAuthed=true; window._fbRealAuth=true; window._fbAuthDenied=false;
+        console.log('🔐 موثّق فعلي:',u.email||u.uid);
+        var first=!window._fbAuthSettled; window._fbAuthSettle();
+        if(!first){ try{ _fbSyncDown(); if(typeof _fbUnsubs!=='undefined'&&!_fbUnsubs.length)_fbStartLiveSync(); }catch(_x){} } // إحياء المزامنة بعد توثيق متأخر
+        try{_fbStatus('on');}catch(_x){}
+      } else if(u&&u.isAnonymous){
+        window._fbAuthed=true; window._fbRealAuth=false;
+        console.log('🟡 توثيق مجهول انتقالي');
+        window._fbAuthSettle();
+        setTimeout(function(){ try{ if(!window._fbRealAuth) notify('🟡 هذا الجهاز على توثيق مجهول — للأمان الكامل: اضغط شارة فايربيس ووثِّقه بحساب المكتب','warn'); }catch(_x){} },3000);
+      } else {
+        firebase.auth().signInAnonymously().catch(function(e){
+          window._fbAuthDenied=true; window._fbAuthSettle();
+          try{_fbStatus('noauth');}catch(_x){}
+          setTimeout(function(){ try{ notify('🔓 الجهاز غير موثّق — اضغط شارة فايربيس وأدخل حساب المكتب','red'); }catch(_x){} },1200);
+        });
+      }
+    });
+  } else { window._fbAuthSettle(); }
   console.log('✅ Firebase جاهز: mokhtarbarelais-95c76');
 } catch (error) {
   console.error('❌ خطأ في Firebase:', error);
@@ -1027,7 +1046,19 @@ table.rtable tr:hover td{background:rgba(201,168,76,0.03);}
 </div>
 
 <!-- محرّر الدفعة السريع (من سجل المعاملات) -->
-<div class="modal-overlay" id="efEditModal" style="display:none"><div class="modal-box" style="width:440px;max-width:94vw">
+<div class="modal-overlay" id="deviceAuthModal" style="display:none"><div class="modal-box" style="width:420px;max-width:94vw">
+    <div class="modal-title">🔐 توثيق هذا الجهاز</div>
+    <div id="dvState" style="font-size:11.5px;color:var(--text2);background:var(--navy3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:12px">الحالة: …</div>
+    <div class="form-field"><label>بريد حساب فايربيس</label><input type="email" id="dvEmail" placeholder="office@..." style="direction:ltr;text-align:left"></div>
+    <div class="form-field"><label>كلمة المرور</label><input type="password" id="dvPass" onkeydown="if(event.key==='Enter')doDeviceAuth()"></div>
+    <div style="font-size:10.5px;color:var(--text3);margin-top:4px;line-height:1.8">أجهزة المكتب: حساب <b>office</b> · تلفونات المناديب: حساب <b>portal</b>. يُوثَّق الجهاز <b>مرة واحدة</b> وتبقى جلسته محفوظة.</div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-gold" style="flex:1;justify-content:center" onclick="doDeviceAuth()">🔐 توثيق</button>
+      <button class="btn btn-outline" onclick="switchDeviceAuth()" title="تسجيل خروج هذا الجهاز لإدخال حساب آخر">تبديل حساب</button>
+      <button class="btn btn-outline" onclick="closeModal('deviceAuthModal')">إغلاق</button>
+    </div>
+  </div></div>
+  <div class="modal-overlay" id="efEditModal" style="display:none"><div class="modal-box" style="width:440px;max-width:94vw">
     <div class="modal-title">✏️ تعديل حقل مخصص</div>
     <input type="hidden" id="efe_id">
     <div class="form-field"><label>اسم الحقل</label><input type="text" id="efe_name"></div>
@@ -1465,7 +1496,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 65 · 2026-08-22'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 66 · 2026-08-22'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;
   // 🔑 استعادة جلسة بوابة المندوب بعد التحديث
@@ -2050,7 +2081,9 @@ function _fbSet(key,data){
     delete _fbPending[key];
     delete _fbTimers[key];
     window._fbDb.collection('mxt').doc(key).set({data:payload,dels:_delMap,ts:Date.now(),by:_fbClientId})
-      .catch(function(e){console.warn('firestore set err',key,e.message);});
+      .catch(function(e){console.warn('firestore set err',key,e.message);
+        if(e&&e.code==='permission-denied'){ window._fbAuthDenied=true; try{_fbStatus('noauth');}catch(_x){} if(!window.__pdNotified){ window.__pdNotified=true; try{notify('🔓 المزامنة موقوفة: الجهاز غير موثّق — اضغط شارة فايربيس','red');}catch(_x){} } }
+      });
   },800);
 }
 // حفظ فوري بدون تجميع (يُستخدم عند الحاجة لضمان وصول البيانات فوراً، مثل قبل تسجيل الخروج)
@@ -2134,17 +2167,49 @@ function _showFbDiag(err,context){
   document.getElementById('fbDiagModal').style.display='block';
   return d;
 }
+// 🔐 توثيق الجهاز بحساب فايربيس حقيقي (office للمكتب / portal للمناديب)
+function openDeviceAuth(){
+  try{ var u=firebase.auth().currentUser;
+    document.getElementById('dvState').textContent = u? (u.isAnonymous?'الحالة: 🟡 توثيق مجهول (انتقالي)':'الحالة: 🔐 موثّق فعلي — '+(u.email||u.uid)) : 'الحالة: 🔓 غير موثّق';
+  }catch(_e){}
+  var em=localStorage.getItem('lb_fb_email')||''; var ei=document.getElementById('dvEmail'); if(ei&&!ei.value)ei.value=em;
+  document.getElementById('deviceAuthModal').style.display='block';
+}
+function doDeviceAuth(){
+  var em=(document.getElementById('dvEmail').value||'').trim();
+  var pw=document.getElementById('dvPass').value||'';
+  if(!em||!pw){ notify('أدخل البريد وكلمة المرور','red'); return; }
+  firebase.auth().signInWithEmailAndPassword(em,pw).then(function(){
+    localStorage.setItem('lb_fb_email',em);
+    document.getElementById('dvPass').value='';
+    closeModal('deviceAuthModal');
+    audit('توثيق جهاز 🔐',{who:em});
+    notify('🔐 وُثِّق هذا الجهاز — الجلسة محفوظة');
+  }).catch(function(e){
+    var m={'auth/wrong-password':'كلمة المرور خاطئة','auth/invalid-credential':'بيانات غير صحيحة','auth/user-not-found':'الحساب غير موجود — أنشئه من Console','auth/invalid-email':'صيغة البريد غير صحيحة','auth/network-request-failed':'لا اتصال بالإنترنت','auth/operation-not-allowed':'فعِّل Email/Password من Console أولاً','auth/too-many-requests':'محاولات كثيرة — انتظر قليلاً'};
+    notify('❌ '+(m[e&&e.code]||('تعذّر التوثيق: '+((e&&e.code)||''))),'red');
+  });
+}
+function switchDeviceAuth(){
+  firebase.auth().signOut().then(function(){
+    var s=document.getElementById('dvState'); if(s)s.textContent='الحالة: 🔓 غير موثّق — أدخل الحساب الجديد';
+    notify('تم تسجيل الخروج من هذا الجهاز — أدخل الحساب الجديد');
+  });
+}
 function _fbStatus(state){
   var el=document.getElementById('fb-status');if(!el)return;
   var map={
     on:  {bg:'rgba(76,175,122,0.15)',bc:'rgba(76,175,122,0.4)', c:'#7DCCA0',      t:'🔥 Firebase متصل'},
     sync:{bg:'rgba(201,168,76,0.15)',bc:'rgba(201,168,76,0.4)', c:'var(--gold)',   t:'🔄 مزامنة...'},
     cfg: {bg:'rgba(76,139,201,0.15)',bc:'rgba(76,139,201,0.4)', c:'#88BBE8',       t:'⚙️ Firebase مُهيَّأ'},
-    off: {bg:'rgba(100,100,100,0.1)',bc:'rgba(100,100,100,0.3)',c:'var(--text3)',   t:'⚡ Firebase'}
+    off: {bg:'rgba(100,100,100,0.1)',bc:'rgba(100,100,100,0.3)',c:'var(--text3)',   t:'⚡ Firebase'},
+    noauth:{bg:'rgba(201,76,76,0.16)',bc:'rgba(201,76,76,0.5)',c:'#E88080',t:'🔓 الجهاز غير موثّق — اضغط للتوثيق'}
   };
   var s=map[state]||map.off;
-  var t=s.t; if(state==='on'&&window._fbAuthed) t+=' · 🔐 موثّق';
+  var t=s.t;
+  if(state==='on'){ if(window._fbRealAuth) t+=' · 🔐 موثّق فعلي'; else if(window._fbAuthed) t+=' · 🟡 مجهول'; }
   el.style.background=s.bg;el.style.borderColor=s.bc;el.style.color=s.c;el.textContent=t;
+  try{ el.onclick=(state==='noauth'||!window._fbRealAuth)?openDeviceAuth:testFbConn; }catch(_x){}
 }
 // تطبيق بيانات مستند واحد قادم من Firestore على المتغيّر المحلي المقابل له + localStorage
 // مُستخدمة من المزامنة الأولية (_fbSyncDown) ومن المزامنة اللحظية (onSnapshot) معاً
@@ -2282,6 +2347,7 @@ function _fbStartLiveSync(){
       }
     },function(e){
       console.warn('Firestore onSnapshot error',key,e.code,e.message);
+      if(e&&e.code==='permission-denied'){ window._fbAuthDenied=true; try{_fbStatus('noauth');}catch(_x){} if(!window.__pdNotified){ window.__pdNotified=true; try{notify('🔓 المزامنة موقوفة: الجهاز غير موثّق — اضغط شارة فايربيس','red');}catch(_x){} } }
     });
     _fbUnsubs.push(unsub);
   });
