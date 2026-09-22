@@ -1496,7 +1496,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 66 · 2026-08-22'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 67 · 2026-08-24'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;
   // 🔑 استعادة جلسة بوابة المندوب بعد التحديث
@@ -1510,11 +1510,16 @@ let extraUsers={};  // {username: {pass, name, role}}
 const ALK='lb_audit_log_v1';
 let auditLog=[];
 try{const _av=localStorage.getItem(ALK);if(_av)auditLog=JSON.parse(_av)||[];}catch(_){}
-function saveAudit(){ try{localStorage.setItem(ALK,JSON.stringify(auditLog));}catch(_){} try{if(window._fbReady)_fbSet(ALK,auditLog);}catch(_){} }
+let _audT=null;
+function saveAudit(){ if(_audT)clearTimeout(_audT); _audT=setTimeout(function(){ _audT=null;
+  try{localStorage.setItem(ALK,JSON.stringify(auditLog));}catch(_){}
+  try{if(window._fbReady)_fbSet(ALK,auditLog);}catch(_){}
+},900); } // 🚀 تجميع الكتابات: سلسلة حركات = حفظة واحدة
+window.addEventListener('beforeunload',function(){ if(_audT){ try{localStorage.setItem(ALK,JSON.stringify(auditLog));}catch(_){} } });
 function audit(act,det){
   det=det||{};
   auditLog.push({id:'al_'+Date.now()+'_'+Math.floor(Math.random()*10000),at:Date.now(),updatedAt:Date.now(),date:todayStr(),time:nowTime(),by:currentUser||'؟',act:act,amt:+det.amt||0,ref:det.ref||'',who:det.who||'',note:det.note||''});
-  if(auditLog.length>4000)auditLog=auditLog.slice(-3500);
+  if(auditLog.length>1800)auditLog=auditLog.slice(-1500); // سقف أخف = كتابة أسرع
   saveAudit();
 }
 let currentUser='';
@@ -2253,11 +2258,12 @@ function _fbApplyKey(key,value){
     if(localEmpty||rt>=lt){ userPerms=value; localStorage.setItem(PKK,JSON.stringify(userPerms)); }
     return true;
   }
-  if(key===ALK&&Array.isArray(value)){ // 📜 اتحاد بالهوية — لا يُفقد قيد من أي جهاز
+  if(key===ALK&&Array.isArray(value)){ // 📜 اتحاد بالهوية — ولا كتابة إن لم يصل جديد
+    var _alPrev=auditLog.length;
     auditLog=smartMergeData(auditLog,value);
-    if(auditLog.length>4000)auditLog=auditLog.slice(-3500);
-    localStorage.setItem(ALK,JSON.stringify(auditLog));
-    return true;
+    if(auditLog.length>1800)auditLog=auditLog.slice(-1500);
+    if(auditLog.length!==_alPrev){ localStorage.setItem(ALK,JSON.stringify(auditLog)); return true; }
+    return false;
   }
   if(key===UKK&&value&&typeof value==='object'){
     // 🛡️ دمج آمن: كل حساب يفوز بأحدث ختم — جهاز قديم لا يمحو تغيير كلمة سر أبداً
@@ -2341,6 +2347,10 @@ function _fbStartLiveSync(){
       if(dd.dels)_mergeDels(dd.dels);          // ✅ استورد شواهد الحذف قبل الدمج
       var changed=_fbApplyKey(key,dd.data);
       _setKnownIds(key,_liveArrForKey(key));    // ✅ حدّث قائمة "المعروف" بعد الدمج ليُكتَشَف الحذف لاحقاً
+      if(key===ALK){ // 📜 قناة السجل صامتة: لا توست ولا إعادة رسم — صفوف صفحة السجل فقط إن كانت مفتوحة
+        if(changed && currentPage==='audit'){ try{renderAuditRows();}catch(_e){} }
+        return;
+      }
       if(changed){
         notify(_fbUserIsBusy()?'☁️ وصل تحديث من زميل — سيظهر بعد أن تُنهي عملك الحالي':'☁️ تحديث جديد من زميل آخر');
         _fbScheduleRerender();
@@ -5961,7 +5971,7 @@ function renderTransactionsPage(){
       
       <div id="txnStageChips" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;overflow-x:auto"></div>
       <div style="display:flex;gap:10px;margin-bottom:12px">
-        <input type="text" id="txnSearch" oninput="filterTxnTable()" placeholder="🔍 بحث..." style="flex:1;padding:8px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px">
+        <input type="text" id="txnSearch" oninput="_txnSearchDeb()" placeholder="🔍 بحث..." style="flex:1;padding:8px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px">
         <select id="txnFilterStatus" onchange="filterTxnTable()" style="padding:8px 12px;background:var(--navy2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Cairo',sans-serif;font-size:13px">
           <option value="">كل حالات الدفع</option><option value="مدفوع بالكامل">مدفوع</option><option value="دفع جزئي">دفع جزئي</option><option value="غير مدفوع">غير مدفوع</option>
         </select>
@@ -5987,14 +5997,18 @@ function txnActionsRow(t,wrap){
   return `<div style='display:flex;gap:3px;align-items:center;flex-wrap:${wrap?'wrap':'nowrap'}'>${txnStageBtns(t)}<span style="width:1px;height:16px;background:var(--border);margin:0 1px"></span><button class='btn btn-green' onclick="sendWhatsApp('${t.id}','استلام')" style='font-size:10px;padding:3px 5px' title='واتساب: استلام'>📲</button><button class='btn btn-blue' onclick="sendWhatsApp('${t.id}','تنفيذ')" style='font-size:10px;padding:3px 5px' title='واتساب: قيد الإنجاز'>⏳</button><button class='btn btn-gold' onclick="sendWhatsApp('${t.id}','تسليم')" style='font-size:10px;padding:3px 5px' title='واتساب: جاهزة'>✅</button><button class='btn' onclick="sendWhatsApp('${t.id}','تم_تسليم')" style='font-size:10px;padding:3px 5px;background:rgba(37,211,102,0.15);color:#25D366;border:1px solid rgba(37,211,102,0.35)' title='واتساب: تم التسليم'>🤝</button><button class='btn' onclick="sendWhatsAppEditable('${t.id}','تأخير')" style='font-size:10px;padding:3px 5px;background:rgba(232,128,76,0.15);color:#E8804C;border:1px solid rgba(232,128,76,0.4)' title='اعتذار تأخير (قابل للتعديل قبل الإرسال)'>⏰</button>${Array.isArray(t.subItems)&&t.subItems.length?`<button class='btn' onclick="openSubItems('${t.id}')" style='font-size:10px;padding:3px 5px;background:rgba(224,164,76,0.15);color:#E0A44C;border:1px solid rgba(224,164,76,0.4)' title='بنود الخدمة (${t.subItems.filter(i=>i.status==='مسترجع').length}/${t.subItems.length})'>🧩</button>`:''}<button class='btn btn-red' onclick="deleteTxn('${t.id}')" style='font-size:10px;padding:3px 5px' title='حذف'>🗑️</button></div>`;
 }
 // ─── وضع العرض: بطاقات (افتراضي) أو جدول — محفوظ لكل جهاز ───
+let _txnShown=120; // 🚀 نافذة العرض: دفعة أولى سريعة ثم زد عند الطلب
+function _txnMore(){ _txnShown+=200; if(window._lastTxnList) renderTxnTable(window._lastTxnList); }
+let _tsT=null; function _txnSearchDeb(){ if(_tsT)clearTimeout(_tsT); _tsT=setTimeout(filterTxnTable,220); } // 🚀 دِبونس البحث
 function _txnViewMode(){ return localStorage.getItem('lb_txn_view')||'cards'; }
 function setTxnView(v){ localStorage.setItem('lb_txn_view',v); renderTransactionsPage(); }
 function renderTxnTable(list){
   const sorted=[...list].sort((a,b)=>b.serial-a.serial);
   const cardsEl=document.getElementById('txnCards');
   if(cardsEl){ // ⬜ عرض البطاقات — كل معاملة مربّع كامل وأزراره تحته
-    cardsEl.innerHTML=sorted.length===0?`<div style="grid-column:1/-1;text-align:center;padding:36px;color:var(--text3)">لا معاملات مطابقة</div>`:
-      sorted.map(t=>{const rem=(+t.cost||0)-(+t.paid||0);const adv=(+t.cost||0)<=0&&(+t.paid||0)>0;const lvl=txnAgeLevel(t),days=txnAgeDays(t);
+    const _total=sorted.length, _view=sorted.slice(0,_txnShown);
+    cardsEl.innerHTML=_total===0?`<div style="grid-column:1/-1;text-align:center;padding:36px;color:var(--text3)">لا معاملات مطابقة</div>`:
+      _view.map(t=>{const rem=(+t.cost||0)-(+t.paid||0);const adv=(+t.cost||0)<=0&&(+t.paid||0)>0;const lvl=txnAgeLevel(t),days=txnAgeDays(t);
         return `<div style="display:block;background:${lvl===2?'linear-gradient(180deg,rgba(201,76,76,0.16),var(--navy2) 55%)':lvl===1?'linear-gradient(180deg,rgba(224,164,76,0.12),var(--navy2) 55%)':'var(--navy2)'};border:1px solid ${lvl===2?'rgba(201,76,76,0.55)':lvl===1?'rgba(224,164,76,0.45)':'var(--border)'};border-radius:14px;padding:13px;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <div style="color:var(--gold);font-weight:800;font-size:13px;white-space:nowrap">${txnAgeLevel(t)===2?'🔴 ':txnAgeLevel(t)===1?'🟡 ':''}${txnKind(t)==='private'?'🚗 '+formatSerial(t.serial):'#'+formatSerial(t.serial)}</div>
@@ -6009,12 +6023,13 @@ function renderTxnTable(list){
           <div style="flex:1;background:var(--navy3);border-radius:8px;padding:7px 4px;text-align:center;min-width:0"><div style="font-size:9.5px;color:var(--text3);white-space:nowrap">الباقي</div><div style="font-size:13px;font-weight:800;color:${adv?'#E0A44C':(rem>0?'#E88080':'#7DCCA0')};white-space:nowrap">${adv?'غير محدد':rem.toLocaleString()}</div></div>
         </div>
         <div style="border-top:1px dashed var(--border);padding-top:9px">${txnActionsRow(t,true)}</div>
-      </div>`;}).join('');
+      </div>`;}).join('')+(_total>_view.length?`<div onclick="_txnMore()" style="grid-column:1/-1;text-align:center;padding:14px;background:var(--navy2);border:1px dashed var(--border2);border-radius:12px;cursor:pointer;color:var(--gold);font-weight:800">⬇️ عرض المزيد (${(_total-_view.length).toLocaleString()} معاملة إضافية)</div>`:'');
     return;
   }
-  document.getElementById('txnTbody').innerHTML=sorted.length===0?
+  const _tTot=sorted.length, _tView=sorted.slice(0,_txnShown);
+  document.getElementById('txnTbody').innerHTML=_tTot===0?
     `<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text3)">لا معاملات بعد</td></tr>`:
-    sorted.map(t=>`<tr style="${txnAgeLevel(t)===2?'background:rgba(201,76,76,0.07)':txnAgeLevel(t)===1?'background:rgba(224,164,76,0.05)':''}">
+    _tView.map(t=>`<tr style="${txnAgeLevel(t)===2?'background:rgba(201,76,76,0.07)':txnAgeLevel(t)===1?'background:rgba(224,164,76,0.05)':''}">
       <td style="color:var(--gold);font-weight:700;white-space:nowrap">${txnAgeLevel(t)===2?'🔴 ':txnAgeLevel(t)===1?'🟡 ':''}${txnKind(t)==='private'?'🚗 '+formatSerial(t.serial):'#'+formatSerial(t.serial)}</td>
       <td style="color:var(--text);cursor:pointer" onclick="if('${t.citId}'){currentCitId='${t.citId}';showPage('citizen_detail');}">${t.citName||'—'}</td>
       <td>${t.type||'—'}</td>
@@ -6025,7 +6040,7 @@ function renderTxnTable(list){
       <td style="color:${(t.cost-t.paid)>0?'#E88080':'#7DCCA0'}">${((t.cost||0)-(t.paid||0)).toLocaleString()}</td>
       <td>${txnPathCell(t,false)}</td>
       <td>${txnActionsRow(t,false)}</td>
-    </tr>`).join('');
+    </tr>`).join('')+(_tTot>_tView.length?`<tr><td colspan="10" onclick="_txnMore()" style="text-align:center;padding:12px;cursor:pointer;color:var(--gold);font-weight:800;border-top:1px dashed var(--border2)">⬇️ عرض المزيد (${(_tTot-_tView.length).toLocaleString()} إضافية)</td></tr>`:'');
 }
 function applyTxnFilters(){
   const f=(document.getElementById('txnSearch')?.value||'').toLowerCase();
@@ -6033,7 +6048,8 @@ function applyTxnFilters(){
   const kf=document.getElementById('txnFilterKind')?.value||'';
   const sf=_txnStageFilter;
   const payMap={'مدفوع بالكامل':'مدفوع','دفع جزئي':'جزئي','غير مدفوع':'غير مدفوع'};
-  renderTxnTable(transactions.filter(t=>{
+  _txnShown=120; // إعادة ضبط النافذة عند تغيير أي فلتر
+  window._lastTxnList=transactions.filter(t=>{
     if(kf && txnKind(t)!==kf) return false;
     if(f && !((t.citName||'').toLowerCase().includes(f)||(t.type||'').includes(f)||((t.serial+'').toLowerCase().includes(f)))) return false;
     if(s && txnPay(t).k!==(payMap[s]||s)) return false;
@@ -6045,7 +6061,8 @@ function applyTxnFilters(){
       else if(st!==sf) return false;
     }
     return true;
-  }));
+  });
+  renderTxnTable(window._lastTxnList);
 }
 function filterTxnTable(){ applyTxnFilters(); }
 function populateTxnSelect(){
