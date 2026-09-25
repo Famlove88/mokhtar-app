@@ -1496,7 +1496,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 67 · 2026-08-24'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 68 · 2026-09-25'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;
   // 🔑 استعادة جلسة بوابة المندوب بعد التحديث
@@ -2085,9 +2085,10 @@ function _fbSet(key,data){
     var payload=_fbPending[key];
     delete _fbPending[key];
     delete _fbTimers[key];
-    window._fbDb.collection('mxt').doc(key).set({data:payload,dels:_delMap,ts:Date.now(),by:_fbClientId})
-      .catch(function(e){console.warn('firestore set err',key,e.message);
-        if(e&&e.code==='permission-denied'){ window._fbAuthDenied=true; try{_fbStatus('noauth');}catch(_x){} if(!window.__pdNotified){ window.__pdNotified=true; try{notify('🔓 المزامنة موقوفة: الجهاز غير موثّق — اضغط شارة فايربيس','red');}catch(_x){} } }
+    var _doSet=function(){ return window._fbDb.collection('mxt').doc(key).set({data:payload,dels:_delMap,ts:Date.now(),by:_fbClientId}); };
+    // 🚂 قطار الكتابات: عربة واحدة على السكة — مهما تقطّع النت لا ينفجر طابور Firestore
+    window._fbChain=(window._fbChain||Promise.resolve()).then(_doSet).catch(function(e){console.warn('firestore set err',key,e&&e.message);
+        if(e&&e.code==='permission-denied' && window._fbAuthSettled && window._fbRealAuth!==true){ window._fbAuthDenied=true; try{_fbStatus('noauth');}catch(_x){} if(!window.__pdNotified){ window.__pdNotified=true; try{notify('🔓 المزامنة موقوفة: الجهاز غير موثّق — اضغط شارة فايربيس','red');}catch(_x){} } }
       });
   },800);
 }
@@ -2357,7 +2358,7 @@ function _fbStartLiveSync(){
       }
     },function(e){
       console.warn('Firestore onSnapshot error',key,e.code,e.message);
-      if(e&&e.code==='permission-denied'){ window._fbAuthDenied=true; try{_fbStatus('noauth');}catch(_x){} if(!window.__pdNotified){ window.__pdNotified=true; try{notify('🔓 المزامنة موقوفة: الجهاز غير موثّق — اضغط شارة فايربيس','red');}catch(_x){} } }
+      if(e&&e.code==='permission-denied' && window._fbAuthSettled && window._fbRealAuth!==true){ window._fbAuthDenied=true; try{_fbStatus('noauth');}catch(_x){} if(!window.__pdNotified){ window.__pdNotified=true; try{notify('🔓 المزامنة موقوفة: الجهاز غير موثّق — اضغط شارة فايربيس','red');}catch(_x){} } } // 🛡️ الموثّق الفعلي: الرفض العابر (تجديد توكن) لا يُفزع
     });
     _fbUnsubs.push(unsub);
   });
@@ -2458,7 +2459,12 @@ function _migrateSerials(){
 
 
 
-function saveC(){try{localStorage.setItem(SK,JSON.stringify(citizens));}catch(e){} if(window._fbReady)_fbSet(SK,citizens);}
+let _scT=null;
+function saveC(){ if(_scT)clearTimeout(_scT); _scT=setTimeout(function(){ _scT=null;
+  try{localStorage.setItem(SK,JSON.stringify(citizens));}catch(e){}
+  if(window._fbReady)_fbSet(SK,citizens);
+},500); } // 🚀 تجميع: سلسلة كتابة = حفظة واحدة (والذاكرة محدثة فوراً دائماً)
+window.addEventListener('beforeunload',function(){ if(_scT){ try{localStorage.setItem(SK,JSON.stringify(citizens));}catch(e){} } });
 function saveEF(){try{localStorage.setItem(EK,JSON.stringify(extraFields));}catch(e){} if(window._fbReady)_fbSet(EK,extraFields);}
 function saveForms(){try{localStorage.setItem(FK,JSON.stringify(forms));}catch(e){} if(window._fbReady)_fbSet(FK,forms);} // ✅ الآن يحفظ في Firebase!
 function saveTextForms(){try{localStorage.setItem(TFK,JSON.stringify(textForms));}catch(e){} if(window._fbReady)_fbSet(TFK,textForms);} // ✅ الآن يحفظ في Firebase!
@@ -2642,6 +2648,7 @@ function doLogin(){
     loadAll();
     _migrateSerials();
     preloadImages(); // ✅ تحميل الصور من IndexedDB
+  setTimeout(function(){ try{ (forms||[]).forEach(function(f){ if(f&&typeof f.image==='string'&&f.image.indexOf('http')===0&&!imgCache[f.image]) cacheFromUrl(f.image); }); }catch(_e){} },1500); // 🖼️ تسخين كاش صور النماذج: تنزيل مرة واحدة ثم عرض فوري دائم
     // إذا لم يُعد التوكن، أظهر شاشة الإعداد بعد ثانية
     if(!GitHubImg.hasToken()){
       setTimeout(() => showGitHubSetup(), 800);
