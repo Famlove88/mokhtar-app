@@ -1496,7 +1496,7 @@ let fbBoxes=[],fbImg=null,fbDragEl=null,fbDragOX=0,fbDragOY=0;
 let currentFontSize=12;
 const USERS={admin:'1234',مختار:'0000',موظف:'1111'};
 const UNAMES={admin:'المسؤول',مختار:'المختار',موظف:'الموظف'};
-const APP_BUILD='Build 69 · 2026-09-26'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
+const APP_BUILD='Build 70 · 2026-11-24'; // ← حدّث هذا الرقم مع كل نسخة جديدة، ويظهر تلقائياً أسفل القائمة
 const SK='lb_cit_v3',EK='lb_ef_v3',FK='lb_forms_v4',TFK='lb_textforms_v1',TK='lb_txn_v1',DK='lb_debts_v1',STK='lb_stamps_v1',CK='lb_cash_v1',SVCK='lb_svc_v1',STCK='lb_stampcat_v1',SGK='lb_stampgrp_v1',WAK='lb_wa_tmpl',FLK='lb_field_layout_v1',PKK='lb_perms_v1',UKK='lb_users_v1',AGK='lb_agents_v1',CTK='lb_ctxn_v1',AFK='lb_affidavits_v1';
 try{document.addEventListener('DOMContentLoaded',function(){var _vl=document.getElementById('appVersionLine');if(_vl)_vl.textContent='الإصدار '+APP_BUILD;
   // 🔑 استعادة جلسة بوابة المندوب بعد التحديث
@@ -1931,8 +1931,7 @@ function formatSerial(n){
   if(n==null||n==='') return '';
   if(typeof n==='string' && /[A-Za-z]/.test(n)) return n; // رمز جاهز مثل F26-001
   var num=parseInt(n,10); if(isNaN(num)) return String(n);
-  var yr=Math.floor(num/1000), seq=num%1000;
-  return 'F'+yr+'-'+String(seq).padStart(3,'0');
+  return 'F'+_serYr(num)+'-'+String(_serSq(num)).padStart(3,'0'); // ✅ يفهم الترميز القديم والجديد (F26-1000 فما فوق)
 }
 // ═══ الأرقام العربية (٠-٩) في المطبوعات الرسمية فقط — الشاشة والإدخال تبقى 0-9 ═══
 function _toArNum(s){ s=String(s==null?'':s); s=s.replace(/(?<![\u2066A-Za-z0-9\u0660-\u0669])([A-Za-z]{1,3}[0-9\u0660-\u0669]{0,4}(?:-[0-9\u0660-\u0669]{1,4})+)(?![A-Za-z0-9\u0660-\u0669])/g,'\u2066$1\u2069'); var _dts=[]; var _dre=new RegExp('\\u2066?(?<![A-Za-z0-9\\u0660-\\u0669])(?:([0-9\\u0660-\\u0669]{1,2})[\\u200E\\u200F\\u061C]*[\\/\\-.\\u2010-\\u2015\\u2212\\uFE63\\uFF0D\\u0640\\u060D][\\u200E\\u200F\\u061C]*([0-9\\u0660-\\u0669]{1,2})[\\u200E\\u200F\\u061C]*[\\/\\-.\\u2010-\\u2015\\u2212\\uFE63\\uFF0D\\u0640\\u060D][\\u200E\\u200F\\u061C]*([0-9\\u0660-\\u0669]{4})|([0-9\\u0660-\\u0669]{4})[\\u200E\\u200F\\u061C]*[\\/\\-.\\u2010-\\u2015\\u2212\\uFE63\\uFF0D\\u0640\\u060D][\\u200E\\u200F\\u061C]*([0-9\\u0660-\\u0669]{1,2})[\\u200E\\u200F\\u061C]*[\\/\\-.\\u2010-\\u2015\\u2212\\uFE63\\uFF0D\\u0640\\u060D][\\u200E\\u200F\\u061C]*([0-9\\u0660-\\u0669]{1,2}))(?![0-9\\u0660-\\u0669])\\u2069?','g'); s=s.replace(_dre,function(m){if(/[\u200F\u061C]/.test(m)) return m; var ar=m.replace(/[\u200E\u200F\u061C\u2066\u2069]/g,'').replace(/[\u2010-\u2015\u2212\uFE63\uFF0D\u0640]/g,'-').replace(/\u060D/g,'/').replace(/[0-9]/g,function(d){return '٠١٢٣٤٥٦٧٨٩'.charAt(+d);}).replace(/([\/\-.])/g,'\u200E$1\u200E');_dts.push('\u2066'+ar+'\u2069');return '\u0001'+(_dts.length-1)+'\u0001';}); s=s.replace(/[0-9]/g,function(d){return '٠١٢٣٤٥٦٧٨٩'.charAt(+d);}); return s.replace(/\u0001([0-9\u0660-\u0669]+)\u0001/g,function(_,i){var n=i.replace(/[\u0660-\u0669]/g,function(a){return '٠١٢٣٤٥٦٧٨٩'.indexOf(a);});return _dts[parseInt(n,10)]||'';}); }
@@ -1973,11 +1972,99 @@ function _arifyHtml(html){
 function _printWrite(w,html){ w.document.write(_arifyHtml(html)); }
 // رقم تسلسلي موحّد سنوي تصاعدي عبر المعاملات العادية والمركّبة (يبدأ F{السنة}-001)
 function _serYY(){ return new Date().getFullYear()%100; }
+// ═══ 🔢 ترقيم سنوي بلا سقف (Build 70) ═══
+// القديم: السنة×1000 + التسلسل ⟵ يتّسع لـ999 فقط، وبعدها كان يقفز إلى «السنة التالية-000» ويعلق عليه.
+// الجديد (لكل رقم يُنشأ من الآن): السنة×1,000,000 + التسلسل. الأرقام القديمة تبقى كما هي حرفياً،
+// والترتيب الرقمي يبقى زمنياً لأن كل رقم جديد أكبر من كل رقم قديم.
+function _serIsCode(s){
+  return typeof s==='string' && /[A-Za-z]/.test(s); // رمز جاهز مثل S-001
+}
+function _serYr(n){
+  n=parseInt(n,10); if(isNaN(n))return -1;
+  return n>=1000000?Math.floor(n/1000000):Math.floor(n/1000);
+}
+function _serSq(n){
+  n=parseInt(n,10); if(isNaN(n))return -1;
+  return n>=1000000?n%1000000:n%1000;
+}
+function _serMk(yy,seq){
+  return yy*1000000+seq;
+}
+function _serAll(){
+  return (transactions||[]).concat(compoundTxns||[]);
+}
+function _serIdTs(t){
+  var m=String((t&&t.id)||'').match(/(\d{11,})/); return m?parseInt(m[1],10):0;
+}
+function _serMadeYY(t){
+  // سنة إنشاء السجل (خانتان): من تاريخه، وإلا من ختم هويته
+  var y=parseInt(_yearOf(t),10);
+  if(!y){ var ts=_serIdTs(t); if(ts) y=new Date(ts).getFullYear(); }
+  return y?y%100:-1;
+}
+function _serIsOverflow(t){
+  // ضحية الخلل القديم حصراً: معاملة من سنة ما تحمل «السنة التالية-000»
+  if(!t||_serIsCode(t.serial))return false;
+  var n=parseInt(t.serial,10); if(isNaN(n)||n>=1000000)return false;
+  var cy=_serMadeYY(t); return cy>=0 && n===(cy+1)*1000;
+}
+function _serPlan(){
+  // خطة واحدة يقرأها المولِّد والمصحِّح معاً فلا يتصادمان:
+  // الأرقام المستعملة لكل سنة + لكل ضحية أصغر رقم حرّ ≥1000 في سنة إنشائها، بترتيب الإنشاء.
+  var used={}, vict=[];
+  _serAll().forEach(function(t){
+    if(!t||_serIsCode(t.serial))return;
+    if(_serIsOverflow(t)){ vict.push(t); return; }
+    var n=parseInt(t.serial,10); if(isNaN(n))return;
+    var y=_serYr(n); (used[y]||(used[y]={}))[_serSq(n)]=1;
+  });
+  vict.sort(function(a,b){
+    var d=_serIdTs(a)-_serIdTs(b); if(d)return d;
+    var x=String(a.id), z=String(b.id); return x<z?-1:(x>z?1:0);
+  });
+  var plan=[];
+  vict.forEach(function(t){
+    var cy=_serMadeYY(t), u=used[cy]||(used[cy]={}), s=1000;
+    while(u[s])s++;
+    u[s]=1; plan.push({t:t,serial:_serMk(cy,s)});
+  });
+  return {used:used,plan:plan};
+}
 function _nextSerialUnified(){
-  var yy=_serYY(); var base=yy*1000; var mx=base;
-  function scan(arr){ (arr||[]).forEach(function(t){ var n=parseInt(t&&t.serial,10); if(!isNaN(n) && Math.floor(n/1000)===yy && n>mx) mx=n; }); }
-  scan(transactions); scan(compoundTxns);
-  return mx+1;
+  var yy=_serYY(), u=_serPlan().used[yy]||{}, mx=0;
+  Object.keys(u).forEach(function(k){ k=+k; if(k>mx)mx=k; });
+  return _serMk(yy,mx+1); // أول السنة = 001، وبعد 999 يكمل 1000، 1001… بلا سقف
+}
+function _serRepairOverflow(){
+  // يعطي كل معاملة علقت على «السنة التالية-000» رقمها الصحيح، ويحفظ الرقم السابق في serialWas.
+  // لا يلمس أي مبلغ ولا أي قيد صندوق/دين — الرقم فقط.
+  var P=_serPlan().plan; if(!P.length)return null;
+  var now=Date.now(), tCh=false, cCh=false, first='', last='', was='';
+  P.forEach(function(p){
+    var t=p.t, old=t.serial, nw=p.serial;
+    if(t.serialWas==null)t.serialWas=old;
+    t.serial=nw; t.updatedAt=now;
+    if((compoundTxns||[]).indexOf(t)>=0)cCh=true; else tCh=true;
+    var aid='al_renum_'+t.id+'_'+nw; // هوية ثابتة: لا يتكرر القيد لو صحّح جهازان المعاملة نفسها
+    if(!auditLog.some(function(a){return a&&a.id===aid;}))
+      auditLog.push({id:aid,at:now,updatedAt:now,date:todayStr(),time:nowTime(),by:currentUser||'؟',act:'تصحيح رقم معاملة',amt:0,ref:'#'+formatSerial(nw),who:t.citName||'',note:'كان #'+formatSerial(old)+' — رقم مكرَّر بسبب امتلاء عدّاد السنة'});
+    if(!first){ first=formatSerial(nw); was=formatSerial(old); }
+    last=formatSerial(nw);
+  });
+  if(auditLog.length>1800)auditLog=auditLog.slice(-1500);
+  if(tCh)saveTxns();
+  if(cCh)saveCompoundTxns();
+  saveAudit();
+  return {n:P.length,first:first,last:last,was:was};
+}
+function _serHay(t){
+  // نص البحث عن الرقم: الخام + المنسَّق + الرقم السابق إن صُحِّح
+  var s=(t.serial+'')+' '+formatSerial(t.serial);
+  if(t.serialWas!=null) s+=' '+t.serialWas+' '+formatSerial(t.serialWas);
+  return s.toLowerCase();
+}
+function _serWasTag(t){
+  return (t&&t.serialWas!=null)?'<div style="font-size:9.5px;font-weight:700;color:var(--text3);margin-top:1px;white-space:nowrap">كان '+formatSerial(t.serialWas)+'</div>':'';
 }
 
 function loadAll(){
@@ -2388,6 +2475,7 @@ function _fbSyncDown(){
       }
     });
     _fbStatus('on');
+    window._fbSyncedOnce=true; // ✅ البيانات طازجة الآن ⟵ يُسمح بتصحيح الأرقام
     _migrateSerials();
     renderSideList();showPage(currentPage||'dashboard');
     notify('☁️ تمت المزامنة');
@@ -2455,6 +2543,13 @@ function _migrateSerials(){
   var changed=false;
   transactions.forEach(function(t){ if(t.serial==null||isNaN(parseInt(t.serial,10))){ t.serial=_nextSerialUnified(); changed=true; } });
   if(changed){try{localStorage.setItem(TK,JSON.stringify(transactions));}catch(e){} if(window._fbReady)_fbSet(TK,transactions);}
+  // 🔧 تصحيح الأرقام التي علقت على «السنة التالية-000» — فقط على بيانات طازجة (بعد مزامنة كاملة) وليس من بوابة المندوب
+  try{
+    if(window._fbSyncedOnce && !_agentPortalId){
+      var _r=_serRepairOverflow();
+      if(_r) setTimeout(function(){ try{ notify('🔧 صُحِّح ترقيم '+_r.n+' معاملة كانت تحمل الرقم '+_r.was+' ← '+(_r.n>1?(_r.first+' … '+_r.last):_r.first),'warn'); }catch(_e){} },3200);
+    }
+  }catch(_e){ console.warn('serial repair',_e); }
 }
 
 
@@ -3841,7 +3936,7 @@ function openAgentItemModal(agId){
 function searchAgItemTxn(v){
   const sug=document.getElementById('agItemTxnSug');
   if(!v||v.length<2){sug.innerHTML='';return;}
-  const hits=transactions.filter(t=>(t.citName||'').includes(v)||(t.type||'').includes(v)||(t.serial+'').includes(v)).slice(0,6);
+  const hits=transactions.filter(t=>(t.citName||'').includes(v)||(t.type||'').includes(v)||_serHay(t).includes(String(v).toLowerCase())).slice(0,6);
   sug.innerHTML=hits.length===0?'':`<div style="position:absolute;top:2px;right:0;left:0;background:var(--navy2);border:1px solid var(--border2);border-radius:8px;z-index:50;overflow:hidden;max-height:200px;overflow-y:auto">
     ${hits.map(t=>`<div onclick="selectAgItemTxn('${t.id}')" style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text);border-bottom:1px solid var(--border)" onmouseenter="this.style.background='var(--navy3)'" onmouseleave="this.style.background=''">
       <strong style="color:var(--gold)">#${formatSerial(t.serial)}</strong> ${t.type||''} — ${t.citName||''}
@@ -4526,7 +4621,7 @@ function doGlobalSearch(v){
   if(!v||v.trim().length<2){res.innerHTML='';res.style.display='none';return;}
   const q=v.trim().toLowerCase();
   const citHits=citizens.filter(c=>citName(c).toLowerCase().includes(q)||(''+(c.serial||'')).includes(q)).slice(0,6);
-  const txnHits=transactions.filter(t=>(t.citName||'').toLowerCase().includes(q)||(t.type||'').toLowerCase().includes(q)||(t.serial+'').includes(q)).slice(0,4);
+  const txnHits=transactions.filter(t=>(t.citName||'').toLowerCase().includes(q)||(t.type||'').toLowerCase().includes(q)||_serHay(t).includes(q)).slice(0,4);
   const agHits=agents.filter(a=>a.name.toLowerCase().includes(q)||(a.phone||'').includes(q)).slice(0,2);
   let html='';
   if(citHits.length){
@@ -4538,7 +4633,7 @@ function doGlobalSearch(v){
   }
   if(txnHits.length){
     html+=`<div style="padding:8px 12px;font-size:10px;color:var(--text3);font-weight:600;letter-spacing:1px;border-bottom:1px solid var(--border)">📑 المعاملات</div>`;
-    html+=txnHits.map(t=>`<div onclick="showPage('transactions',document.querySelector('[data-page=transactions]'));setTimeout(()=>{const s=document.getElementById('txnSearch');if(s){s.value='${t.serial}';filterTxnTable();}},100);hideGlobalResults();document.getElementById('globalSearch').value=''" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s" onmouseenter="this.style.background='var(--navy3)'" onmouseleave="this.style.background=''">
+    html+=txnHits.map(t=>`<div onclick="showPage('transactions',document.querySelector('[data-page=transactions]'));setTimeout(()=>{const s=document.getElementById('txnSearch');if(s){s.value='${formatSerial(t.serial)}';filterTxnTable();}},100);hideGlobalResults();document.getElementById('globalSearch').value=''" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.1s" onmouseenter="this.style.background='var(--navy3)'" onmouseleave="this.style.background=''">
       <div style="font-size:13px;font-weight:600;color:var(--gold)">#${formatSerial(t.serial)} <span style="color:var(--text);font-weight:400">${t.type||''}</span></div>
       <div style="font-size:11px;color:var(--text3)">${t.citName||''} · ${t.date||''}</div>
     </div>`).join('');
@@ -6024,7 +6119,7 @@ function renderTxnTable(list){
       _view.map(t=>{const rem=(+t.cost||0)-(+t.paid||0);const adv=(+t.cost||0)<=0&&(+t.paid||0)>0;const lvl=txnAgeLevel(t),days=txnAgeDays(t);
         return `<div style="display:block;background:${lvl===2?'linear-gradient(180deg,rgba(201,76,76,0.16),var(--navy2) 55%)':lvl===1?'linear-gradient(180deg,rgba(224,164,76,0.12),var(--navy2) 55%)':'var(--navy2)'};border:1px solid ${lvl===2?'rgba(201,76,76,0.55)':lvl===1?'rgba(224,164,76,0.45)':'var(--border)'};border-radius:14px;padding:13px;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          <div style="color:var(--gold);font-weight:800;font-size:13px;white-space:nowrap">${txnAgeLevel(t)===2?'🔴 ':txnAgeLevel(t)===1?'🟡 ':''}${txnKind(t)==='private'?'🚗 '+formatSerial(t.serial):'#'+formatSerial(t.serial)}</div>
+          <div style="color:var(--gold);font-weight:800;font-size:13px;white-space:nowrap">${txnAgeLevel(t)===2?'🔴 ':txnAgeLevel(t)===1?'🟡 ':''}${txnKind(t)==='private'?'🚗 '+formatSerial(t.serial):'#'+formatSerial(t.serial)}${_serWasTag(t)}</div>
           <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">${lvl>0?`<span style="font-size:10px;font-weight:800;padding:3px 9px;border-radius:11px;background:${lvl===2?'rgba(201,76,76,0.2)':'rgba(224,164,76,0.18)'};color:${lvl===2?'#E88080':'#E0A44C'};white-space:nowrap">⏰ منذ ${days} يوم</span>`:''}${stageChip(t)}<span onclick="openTxnPayEditor('${t.id}')" style="cursor:pointer" title="ملف الدفع: دفعات وسجل وسعر">${payChip(t)}</span></div>
         </div>
         <div onclick="if('${t.citId||''}'){currentCitId='${t.citId}';showPage('citizen_detail');}" style="font-size:16px;font-weight:800;color:var(--text);cursor:${t.citId?'pointer':'default'};margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(t.citName||'')}">${esc(t.citName||'—')}</div>
@@ -6043,7 +6138,7 @@ function renderTxnTable(list){
   document.getElementById('txnTbody').innerHTML=_tTot===0?
     `<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text3)">لا معاملات بعد</td></tr>`:
     _tView.map(t=>`<tr style="${txnAgeLevel(t)===2?'background:rgba(201,76,76,0.07)':txnAgeLevel(t)===1?'background:rgba(224,164,76,0.05)':''}">
-      <td style="color:var(--gold);font-weight:700;white-space:nowrap">${txnAgeLevel(t)===2?'🔴 ':txnAgeLevel(t)===1?'🟡 ':''}${txnKind(t)==='private'?'🚗 '+formatSerial(t.serial):'#'+formatSerial(t.serial)}</td>
+      <td style="color:var(--gold);font-weight:700;white-space:nowrap">${txnAgeLevel(t)===2?'🔴 ':txnAgeLevel(t)===1?'🟡 ':''}${txnKind(t)==='private'?'🚗 '+formatSerial(t.serial):'#'+formatSerial(t.serial)}${_serWasTag(t)}</td>
       <td style="color:var(--text);cursor:pointer" onclick="if('${t.citId}'){currentCitId='${t.citId}';showPage('citizen_detail');}">${t.citName||'—'}</td>
       <td>${t.type||'—'}</td>
       <td style="direction:ltr;text-align:right;white-space:nowrap">${t.date||'—'}</td>
@@ -6064,7 +6159,7 @@ function applyTxnFilters(){
   _txnShown=120; // إعادة ضبط النافذة عند تغيير أي فلتر
   window._lastTxnList=transactions.filter(t=>{
     if(kf && txnKind(t)!==kf) return false;
-    if(f && !((t.citName||'').toLowerCase().includes(f)||(t.type||'').includes(f)||((t.serial+'').toLowerCase().includes(f)))) return false;
+    if(f && !((t.citName||'').toLowerCase().includes(f)||(t.type||'').includes(f)||(_serHay(t).includes(f)))) return false;
     if(s && txnPay(t).k!==(payMap[s]||s)) return false;
     if(sf){
       const st=txnStage(t), rem=(+t.cost||0)-(+t.paid||0);
